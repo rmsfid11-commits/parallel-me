@@ -122,17 +122,23 @@ export default function CosmicCanvas() {
 
     const cx = width / 2;
     const cy = height / 2;
-    const baseLength = Math.min(width, height) * 0.18;
+    const baseLength = Math.min(width, height) * 0.28;
 
-    // Generate tree from center outward in multiple directions
-    const rootAngles = [-Math.PI / 2, -Math.PI / 2 - 0.8, -Math.PI / 2 + 0.8, Math.PI / 2, Math.PI / 2 - 0.6, Math.PI / 2 + 0.6];
+    // Generate tree from center outward — 8 directions for full coverage
+    const rootAngles = [
+      -Math.PI / 2,
+      -Math.PI / 2 - 0.7, -Math.PI / 2 + 0.7,
+      -Math.PI / 2 - 1.4, -Math.PI / 2 + 1.4,
+      Math.PI / 2,
+      Math.PI / 2 - 0.6, Math.PI / 2 + 0.6,
+    ];
     rootAngles.forEach((angle, i) => {
-      const hue = 35 + i * 8; // gold range
-      generateBranches(cx, cy, angle, baseLength, 3, 0, hue);
+      const hue = 30 + i * 6; // gold range
+      generateBranches(cx, cy, angle, baseLength, 4.5, 0, hue);
     });
 
     // Particles flowing along branches
-    const particles: Particle[] = Array.from({ length: 60 }, () => ({
+    const particles: Particle[] = Array.from({ length: 90 }, () => ({
       progress: Math.random(),
       speed: 0.001 + Math.random() * 0.003,
       branchIndex: Math.floor(Math.random() * branches.length),
@@ -166,15 +172,39 @@ export default function CosmicCanvas() {
       const mx = (mouseRef.current.x - 0.5) * 8;
       const my = (mouseRef.current.y - 0.5) * 8;
 
-      // Center glow
-      const glowSize = 40 + Math.sin(time * 0.5) * 10;
-      const centerGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowSize);
-      centerGlow.addColorStop(0, "rgba(212, 168, 83, 0.8)");
-      centerGlow.addColorStop(0.3, "rgba(212, 168, 83, 0.3)");
-      centerGlow.addColorStop(0.6, "rgba(179, 136, 255, 0.1)");
-      centerGlow.addColorStop(1, "transparent");
-      ctx.fillStyle = centerGlow;
-      ctx.fillRect(cx - glowSize, cy - glowSize, glowSize * 2, glowSize * 2);
+      // Center glow — 3 layered radial gradients for depth
+      const pulse = Math.sin(time * 0.4) * 0.15 + 1;
+
+      // Layer 1: Wide ambient halo
+      const haloSize = Math.min(width, height) * 0.35 * pulse;
+      const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, haloSize);
+      halo.addColorStop(0, "rgba(212, 168, 83, 0.12)");
+      halo.addColorStop(0.4, "rgba(179, 136, 255, 0.05)");
+      halo.addColorStop(1, "transparent");
+      ctx.fillStyle = halo;
+      ctx.fillRect(cx - haloSize, cy - haloSize, haloSize * 2, haloSize * 2);
+
+      // Layer 2: Medium warm glow
+      const midSize = 120 * pulse;
+      const midGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, midSize);
+      midGlow.addColorStop(0, "rgba(255, 220, 150, 0.6)");
+      midGlow.addColorStop(0.25, "rgba(212, 168, 83, 0.35)");
+      midGlow.addColorStop(0.5, "rgba(212, 168, 83, 0.12)");
+      midGlow.addColorStop(0.8, "rgba(179, 136, 255, 0.04)");
+      midGlow.addColorStop(1, "transparent");
+      ctx.fillStyle = midGlow;
+      ctx.fillRect(cx - midSize, cy - midSize, midSize * 2, midSize * 2);
+
+      // Layer 3: Bright core
+      const coreSize = 35 + Math.sin(time * 0.6) * 8;
+      const coreGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreSize);
+      coreGlow.addColorStop(0, "rgba(255, 245, 220, 1)");
+      coreGlow.addColorStop(0.15, "rgba(255, 230, 180, 0.9)");
+      coreGlow.addColorStop(0.4, "rgba(212, 168, 83, 0.5)");
+      coreGlow.addColorStop(0.7, "rgba(212, 168, 83, 0.15)");
+      coreGlow.addColorStop(1, "transparent");
+      ctx.fillStyle = coreGlow;
+      ctx.fillRect(cx - coreSize, cy - coreSize, coreSize * 2, coreSize * 2);
 
       // Draw branches
       ctx.globalCompositeOperation = "lighter";
@@ -182,7 +212,7 @@ export default function CosmicCanvas() {
       branches.forEach((b) => {
         const breathe = Math.sin(time * 0.3 + b.phase) * 0.15 + 0.85;
         const depthFade = 1 - b.depth / (maxDepth + 1);
-        const alpha = depthFade * 0.5 * breathe;
+        const alpha = depthFade * 0.7 * breathe;
 
         // Slight mouse offset
         const offsetX = mx * (b.depth * 0.5);
@@ -203,6 +233,21 @@ export default function CosmicCanvas() {
         grad.addColorStop(0, `hsla(${b.hue}, 70%, 65%, ${alpha})`);
         grad.addColorStop(1, `hsla(${b.hue + 30}, 60%, 55%, ${alpha * 0.6})`);
 
+        // Outer glow for main branches
+        if (b.depth < 2) {
+          ctx.strokeStyle = `hsla(${b.hue}, 60%, 60%, ${alpha * 0.2})`;
+          ctx.lineWidth = b.thickness * breathe * 4;
+          ctx.lineCap = "round";
+          ctx.stroke();
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(b.startX + offsetX, b.startY + offsetY);
+        ctx.bezierCurveTo(
+          b.cp1x + offsetX, b.cp1y + offsetY,
+          b.cp2x + offsetX, b.cp2y + offsetY,
+          b.endX + offsetX, b.endY + offsetY
+        );
         ctx.strokeStyle = grad;
         ctx.lineWidth = b.thickness * breathe;
         ctx.lineCap = "round";
