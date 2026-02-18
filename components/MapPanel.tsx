@@ -1,6 +1,5 @@
 "use client";
 
-import { useCallback } from "react";
 import {
   ReactFlow,
   Controls,
@@ -23,6 +22,7 @@ interface MapPanelProps {
   onEdgesChange: ReturnType<typeof useEdgesState>[2];
   onFitView: () => void;
   onAnalyze: () => void;
+  onClose: () => void;
 }
 
 export default function MapPanel({
@@ -32,79 +32,91 @@ export default function MapPanel({
   onEdgesChange,
   onFitView,
   onAnalyze,
+  onClose,
 }: MapPanelProps) {
   return (
-    <div className="relative w-full h-full">
+    <div className="fixed inset-0 z-40 flex flex-col" style={{ background: "#000" }}>
       <StarField />
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        nodeTypes={nodeTypes}
-        fitView
-        minZoom={0.05}
-        maxZoom={1.5}
-        defaultViewport={{ x: 0, y: 0, zoom: 0.7 }}
-        proOptions={{ hideAttribution: true }}
-        style={{ background: "transparent", position: "relative", zIndex: 1 }}
-      >
-        <Controls
-          className="!rounded-xl !border-0"
-          style={{
-            background: "rgba(0, 0, 0, 0.8)",
-            backdropFilter: "blur(12px)",
-            border: "1px solid rgba(212, 168, 83, 0.15)",
-          }}
-        />
-      </ReactFlow>
 
-      {/* Map action buttons */}
+      {/* Top bar */}
       <div
-        className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex gap-2"
+        className="flex-none flex items-center justify-between px-4 py-2.5 z-10"
+        style={{
+          background: "rgba(0,0,0,0.9)",
+          borderBottom: "1px solid rgba(212,168,83,0.1)",
+          paddingTop: "max(8px, env(safe-area-inset-top))",
+        }}
       >
-        <button
-          onClick={onFitView}
-          className="px-3 py-1.5 rounded-lg text-xs transition-all duration-300"
+        <h2
+          className="text-sm tracking-wide"
           style={{
-            background: "rgba(0, 0, 0, 0.8)",
-            border: "1px solid rgba(212, 168, 83, 0.3)",
-            color: "rgba(212, 168, 83, 0.8)",
+            color: "rgba(212,168,83,0.8)",
             fontFamily: "var(--font-display), serif",
-            backdropFilter: "blur(12px)",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = "rgba(212, 168, 83, 0.6)";
-            e.currentTarget.style.boxShadow = "0 0 20px rgba(212, 168, 83, 0.2)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = "rgba(212, 168, 83, 0.3)";
-            e.currentTarget.style.boxShadow = "none";
           }}
         >
-          나의 우주 보기
-        </button>
-        <button
-          onClick={onAnalyze}
-          className="px-3 py-1.5 rounded-lg text-xs transition-all duration-300"
-          style={{
-            background: "rgba(0, 0, 0, 0.8)",
-            border: "1px solid rgba(179, 136, 255, 0.3)",
-            color: "rgba(179, 136, 255, 0.8)",
-            fontFamily: "var(--font-display), serif",
-            backdropFilter: "blur(12px)",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = "rgba(179, 136, 255, 0.6)";
-            e.currentTarget.style.boxShadow = "0 0 20px rgba(179, 136, 255, 0.2)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = "rgba(179, 136, 255, 0.3)";
-            e.currentTarget.style.boxShadow = "none";
-          }}
+          나의 우주
+        </h2>
+        <div className="flex gap-2">
+          <button
+            onClick={onFitView}
+            className="px-2.5 py-1 rounded-lg text-[11px] transition-all duration-300"
+            style={{
+              background: "rgba(0,0,0,0.7)",
+              border: "1px solid rgba(212,168,83,0.3)",
+              color: "rgba(212,168,83,0.8)",
+            }}
+          >
+            전체 보기
+          </button>
+          <button
+            onClick={onAnalyze}
+            className="px-2.5 py-1 rounded-lg text-[11px] transition-all duration-300"
+            style={{
+              background: "rgba(0,0,0,0.7)",
+              border: "1px solid rgba(179,136,255,0.3)",
+              color: "rgba(179,136,255,0.8)",
+            }}
+          >
+            우주 분석
+          </button>
+          <button
+            onClick={onClose}
+            className="px-2.5 py-1 rounded-lg text-[11px] transition-all duration-300"
+            style={{
+              background: "rgba(212,168,83,0.1)",
+              border: "1px solid rgba(212,168,83,0.3)",
+              color: "rgba(212,168,83,0.9)",
+            }}
+          >
+            채팅으로 돌아가기
+          </button>
+        </div>
+      </div>
+
+      {/* ReactFlow */}
+      <div className="flex-1 relative">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          nodeTypes={nodeTypes}
+          fitView
+          minZoom={0.05}
+          maxZoom={1.5}
+          defaultViewport={{ x: 0, y: 0, zoom: 0.7 }}
+          proOptions={{ hideAttribution: true }}
+          style={{ background: "transparent", position: "relative", zIndex: 1 }}
         >
-          나의 우주 분석
-        </button>
+          <Controls
+            className="!rounded-xl !border-0"
+            style={{
+              background: "rgba(0, 0, 0, 0.8)",
+              backdropFilter: "blur(12px)",
+              border: "1px solid rgba(212, 168, 83, 0.15)",
+            }}
+          />
+        </ReactFlow>
       </div>
     </div>
   );
