@@ -1,21 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateOnboardingReaction } from "@/lib/gemini";
+import { UserProfile } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
   try {
-    const { questionContext, userInput, previousInputs } = await request.json();
+    const { step, userInput, collectedProfile } = await request.json() as {
+      step: number;
+      userInput: string;
+      collectedProfile: Partial<UserProfile>;
+    };
 
-    if (!questionContext || !userInput) {
+    if (step === undefined || !userInput) {
       return NextResponse.json(
-        { error: "questionContext와 userInput은 필수입니다." },
+        { error: "step과 userInput은 필수입니다." },
         { status: 400 }
       );
     }
 
     const reaction = await generateOnboardingReaction(
-      questionContext,
+      step,
       userInput,
-      previousInputs || {}
+      collectedProfile || {}
     );
 
     return NextResponse.json({ reaction });

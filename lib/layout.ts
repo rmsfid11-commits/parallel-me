@@ -9,13 +9,16 @@ export function getLayoutedElements(
   edges: Edge[],
   direction: "TB" | "LR" = "LR"
 ): { nodes: Node[]; edges: Edge[] } {
+  const isMobile =
+    typeof window !== "undefined" && window.innerWidth <= 768;
+
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({
     rankdir: direction,
-    ranksep: 400,
-    nodesep: 250,
-    edgesep: 80,
+    ranksep: isMobile ? 100 : 400,
+    nodesep: isMobile ? 80 : 250,
+    edgesep: isMobile ? 30 : 80,
   });
 
   nodes.forEach((node) => {

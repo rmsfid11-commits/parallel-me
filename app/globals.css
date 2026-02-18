@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 :root {
-  --bg-primary: #08061a;
+  --bg-primary: #000000;
   --accent-gold: #d4a853;
   --accent-purple: #b388ff;
-  --background: #08061a;
+  --background: #000000;
   --foreground: #ededed;
 }
 
@@ -16,7 +16,7 @@
 }
 
 body {
-  background: #08061a;
+  background: #000000;
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
   overscroll-behavior: none;

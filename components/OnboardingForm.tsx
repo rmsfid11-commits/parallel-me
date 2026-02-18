@@ -2,69 +2,77 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { SimulationMode, UserProfile } from "@/lib/types";
+import { UserProfile } from "@/lib/types";
 import { playTypeTick, playSwoosh } from "@/lib/sounds";
 
 interface OnboardingStep {
   question: string;
   field: keyof UserProfile;
-  type: "text" | "number" | "mode";
-  context: string; // sent to AI for reaction
+  type: "text" | "number" | "gender";
   placeholder?: string;
 }
 
 const STEPS: OnboardingStep[] = [
   {
-    question: "너 지금 뭐 하는 사람이야?",
-    field: "job",
+    question: "생년월일이 어떻게 돼?",
+    field: "birthday",
     type: "text",
-    context: "직업을 물었음",
-    placeholder: "직업을 입력해",
+    placeholder: "예: 1992.04.27",
   },
   {
-    question: "몇 번째 해를 보내고 있어?",
+    question: "태어난 시간 알아? 몰라도 괜찮아",
+    field: "birthTime",
+    type: "text",
+    placeholder: "예: 15:00 또는 모름",
+  },
+  {
+    question: "성별은?",
+    field: "gender",
+    type: "gender",
+  },
+  {
+    question: "지금 뭐 하고 있어?",
+    field: "job",
+    type: "text",
+    placeholder: "직업이나 하는 일",
+  },
+  {
+    question: "몇 살이야?",
     field: "age",
     type: "number",
-    context: "나이를 물었음",
     placeholder: "나이",
   },
   {
-    question: "지금 너를 제일 무겁게 짓누르는 게 뭐야?",
-    field: "concern",
+    question: "요즘 네 머릿속을 가장 많이 차지하는 건 뭐야?",
+    field: "interest",
     type: "text",
-    context: "가장 큰 고민을 물었음",
     placeholder: "자유롭게 적어",
   },
   {
-    question: "그래서 네가 진짜 원하는 건 뭐야?",
-    field: "goal",
+    question: "마지막. 네 미래에서 제일 궁금한 게 뭐야?",
+    field: "question",
     type: "text",
-    context: "목표/꿈을 물었음",
-    placeholder: "궁극적으로 원하는 것",
-  },
-  {
-    question: "너의 미래를 어떤 눈으로 볼까?",
-    field: "mode",
-    type: "mode",
-    context: "시뮬레이션 모드를 선택함",
+    placeholder: "미래에 대한 궁금함",
   },
 ];
 
-const MODES: { value: SimulationMode; emoji: string; label: string; desc: string }[] = [
-  { value: "희망적 우주", emoji: "🌅", label: "희망적으로", desc: "잘 될 거라는 전제로" },
-  { value: "현실적 우주", emoji: "⚖️", label: "현실적으로", desc: "있는 그대로" },
-  { value: "최악의 우주", emoji: "🌑", label: "최악까지", desc: "바닥까지 보여줘" },
+const GENDERS = [
+  { value: "남", label: "남자" },
+  { value: "여", label: "여자" },
+  { value: "말하고 싶지 않음", label: "말하고 싶지 않음" },
 ];
 
 export default function OnboardingForm() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<UserProfile>({
+    birthday: "",
+    birthTime: "",
+    gender: "",
     job: "",
-    age: 25,
-    concern: "",
-    goal: "",
-    mode: "현실적 우주",
+    age: 0,
+    interest: "",
+    question: "",
   });
   const [phase, setPhase] = useState<"input" | "reacting" | "transitioning" | "loading">("input");
   const [aiReaction, setAiReaction] = useState("");
@@ -94,7 +102,7 @@ export default function OnboardingForm() {
   const canProceed = () => {
     const val = form[currentStep.field];
     if (currentStep.type === "number") return typeof val === "number" && val > 0;
-    if (currentStep.type === "mode") return true;
+    if (currentStep.type === "gender") return typeof val === "string" && val.length > 0;
     return typeof val === "string" && val.trim().length > 0;
   };
 
@@ -118,11 +126,11 @@ export default function OnboardingForm() {
   // Advance to next step
   const advanceStep = useCallback(() => {
     if (step >= totalSteps - 1) {
-      // Last step — go to simulation
+      // Last step — save profile to sessionStorage and go to simulation
       setPhase("loading");
+      sessionStorage.setItem("parallelme-profile", JSON.stringify(form));
       setTimeout(() => {
-        const encoded = encodeURIComponent(JSON.stringify(form));
-        router.push(`/simulation?profile=${encoded}`);
+        router.push("/simulation");
       }, 2500);
       return;
     }
@@ -142,34 +150,18 @@ export default function OnboardingForm() {
     if (!canProceed() || phase !== "input") return;
 
     const val = form[currentStep.field];
-    const userInput = currentStep.type === "number" ? String(val) : String(val);
-
-    // For mode selection, show fixed reaction then advance
-    if (currentStep.type === "mode") {
-      setPhase("reacting");
-      const reaction = "좋아. 너의 우주를 펼쳐볼게.";
-      startTypewriter(reaction, () => {
-        autoAdvanceRef.current = setTimeout(advanceStep, 1500);
-      });
-      return;
-    }
+    const userInput = String(val);
 
     setPhase("reacting");
-
-    // Build previous inputs for context
-    const previousInputs: Record<string, string> = {};
-    if (form.job && currentStep.field !== "job") previousInputs["직업"] = form.job;
-    if (form.age && currentStep.field !== "age") previousInputs["나이"] = String(form.age);
-    if (form.concern && currentStep.field !== "concern") previousInputs["고민"] = form.concern;
 
     try {
       const res = await fetch("/api/onboarding-react", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          questionContext: currentStep.context,
+          step,
           userInput,
-          previousInputs,
+          collectedProfile: form,
         }),
       });
 
@@ -185,7 +177,7 @@ export default function OnboardingForm() {
       advanceStep();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, currentStep, phase, startTypewriter, advanceStep]);
+  }, [form, currentStep, phase, step, startTypewriter, advanceStep]);
 
   // Skip waiting — advance immediately on click/tap during reaction
   const skipToNext = useCallback(() => {
@@ -207,7 +199,6 @@ export default function OnboardingForm() {
   if (phase === "loading") {
     return (
       <div className="flex flex-col items-center justify-center py-20 animate-fadeIn">
-        {/* Golden dot that expands */}
         <div className="relative w-32 h-32 mb-8">
           <div
             className="absolute inset-0 rounded-full animate-ping"
@@ -227,7 +218,6 @@ export default function OnboardingForm() {
               boxShadow: "0 0 30px rgba(212,168,83,0.8), 0 0 60px rgba(212,168,83,0.4)",
             }}
           />
-          {/* Lines extending from center */}
           <div
             className="absolute"
             style={{
@@ -272,7 +262,7 @@ export default function OnboardingForm() {
             fontFamily: "var(--font-display), serif",
           }}
         >
-          당신의 타임라인을 생성하고 있습니다...
+          당신의 우주를 펼치고 있습니다...
         </p>
       </div>
     );
@@ -283,7 +273,7 @@ export default function OnboardingForm() {
       className="w-full max-w-lg mx-auto px-4"
       onClick={phase === "reacting" ? skipToNext : undefined}
     >
-      {/* Progress dots */}
+      {/* Progress dots — 7개 */}
       <div className="flex items-center justify-center gap-3 mb-12">
         {STEPS.map((_, i) => (
           <div
@@ -322,7 +312,7 @@ export default function OnboardingForm() {
           {currentStep.question}
         </h2>
 
-        {/* Input field */}
+        {/* Text input */}
         {phase === "input" && currentStep.type === "text" && (
           <div className="flex justify-center">
             <input
@@ -356,6 +346,7 @@ export default function OnboardingForm() {
           </div>
         )}
 
+        {/* Number input */}
         {phase === "input" && currentStep.type === "number" && (
           <div className="flex justify-center">
             <input
@@ -391,26 +382,42 @@ export default function OnboardingForm() {
           </div>
         )}
 
-        {phase === "input" && currentStep.type === "mode" && (
+        {/* Gender select — 3 buttons */}
+        {phase === "input" && currentStep.type === "gender" && (
           <div className="space-y-3 max-w-sm mx-auto">
-            {MODES.map((m) => (
+            {GENDERS.map((g) => (
               <button
-                key={m.value}
+                key={g.value}
                 onClick={() => {
-                  setForm({ ...form, mode: m.value });
-                  // Auto-submit after mode selection
-                  setTimeout(() => {
+                  setForm({ ...form, gender: g.value });
+                  // Auto-submit after selection
+                  setTimeout(async () => {
                     setPhase("reacting");
-                    const reaction = "좋아. 너의 우주를 펼쳐볼게.";
-                    startTypewriter(reaction, () => {
-                      autoAdvanceRef.current = setTimeout(advanceStep, 1500);
-                    });
+                    try {
+                      const res = await fetch("/api/onboarding-react", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          step,
+                          userInput: g.value,
+                          collectedProfile: { ...form, gender: g.value },
+                        }),
+                      });
+                      const data = await res.json();
+                      const reaction = data.reaction || "...";
+                      setAiReaction(reaction);
+                      startTypewriter(reaction, () => {
+                        autoAdvanceRef.current = setTimeout(advanceStep, 1500);
+                      });
+                    } catch {
+                      advanceStep();
+                    }
                   }, 100);
                 }}
-                className="w-full flex items-center gap-4 px-5 py-4 rounded-xl transition-all duration-300"
+                className="w-full flex items-center justify-center gap-3 px-5 py-4 rounded-xl transition-all duration-300"
                 style={{
                   background: "rgba(0, 0, 0, 0.4)",
-                  border: form.mode === m.value
+                  border: form.gender === g.value
                     ? "1px solid rgba(212, 168, 83, 0.5)"
                     : "1px solid rgba(255, 255, 255, 0.08)",
                 }}
@@ -420,26 +427,20 @@ export default function OnboardingForm() {
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor =
-                    form.mode === m.value
+                    form.gender === g.value
                       ? "rgba(212, 168, 83, 0.5)"
                       : "rgba(255, 255, 255, 0.08)";
                   e.currentTarget.style.background = "rgba(0, 0, 0, 0.4)";
                 }}
               >
-                <span className="text-2xl">{m.emoji}</span>
-                <div className="text-left">
-                  <p style={{ color: "rgba(255,255,255,0.85)" }}>{m.label}</p>
-                  <p className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
-                    {m.desc}
-                  </p>
-                </div>
+                <span style={{ color: "rgba(255,255,255,0.85)" }}>{g.label}</span>
               </button>
             ))}
           </div>
         )}
 
-        {/* Submit hint (for text/number inputs) */}
-        {phase === "input" && currentStep.type !== "mode" && (
+        {/* Submit hint */}
+        {phase === "input" && currentStep.type !== "gender" && (
           <div className="flex justify-center mt-6">
             <button
               onClick={submitStep}

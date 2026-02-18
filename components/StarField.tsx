@@ -224,7 +224,7 @@ export default function StarField() {
         inset: 0,
         zIndex: 0,
         pointerEvents: "none",
-        background: "#08061a",
+        background: "#000000",
       }}
     />
   );

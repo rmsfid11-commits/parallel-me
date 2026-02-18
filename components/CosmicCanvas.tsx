@@ -115,7 +115,7 @@ export default function CosmicCanvas() {
       // Background — subtle radial gradient
       const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, height) * 0.7);
       bg.addColorStop(0, "#0c081e");
-      bg.addColorStop(0.4, "#08061a");
+      bg.addColorStop(0.4, "#000000");
       bg.addColorStop(1, "#06041a");
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, width, height);
