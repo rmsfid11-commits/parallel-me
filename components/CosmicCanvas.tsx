@@ -11,33 +11,27 @@ interface Star {
   phase: number;
 }
 
-interface Particle {
-  progress: number;
-  speed: number;
-  branchIndex: number;
-}
-
-interface Branch {
-  startX: number;
-  startY: number;
-  endX: number;
-  endY: number;
-  cp1x: number;
-  cp1y: number;
-  cp2x: number;
-  cp2y: number;
-  thickness: number;
-  depth: number;
+interface Tendril {
+  angle: number;       // base angle from center
+  length: number;      // how far it reaches
+  thickness: number;   // base thickness
+  waveFreq: number;    // sine wave frequency for organic curve
+  waveAmp: number;     // sine wave amplitude
+  phase: number;       // animation phase offset
   hue: number;
-  phase: number;
+  segments: number;    // resolution
 }
 
-interface JunctionNode {
-  x: number;
-  y: number;
-  size: number;
-  depth: number;
+interface SubTendril {
+  parentIdx: number;
+  startT: number;      // where on parent it branches (0-1)
+  angle: number;       // offset angle
+  length: number;
+  thickness: number;
+  waveFreq: number;
+  waveAmp: number;
   phase: number;
+  hue: number;
 }
 
 export default function CosmicCanvas() {
@@ -67,10 +61,12 @@ export default function CosmicCanvas() {
     resize();
     window.addEventListener("resize", resize);
 
-    const handleMouse = (e: MouseEvent) => {
-      mouseRef.current = { x: e.clientX / width, y: e.clientY / height };
+    const handleMouse = (e: MouseEvent | TouchEvent) => {
+      const pt = "touches" in e ? e.touches[0] : e;
+      if (pt) mouseRef.current = { x: pt.clientX / width, y: pt.clientY / height };
     };
-    window.addEventListener("mousemove", handleMouse);
+    window.addEventListener("mousemove", handleMouse as EventListener);
+    window.addEventListener("touchmove", handleMouse as EventListener, { passive: true });
 
     // Stars
     const starCount = Math.min(300, Math.floor((width * height) / 4000));
@@ -78,94 +74,86 @@ export default function CosmicCanvas() {
       x: Math.random() * width,
       y: Math.random() * height,
       size: Math.random() * 1.8 + 0.3,
-      opacity: Math.random() * 0.6 + 0.15,
-      speed: Math.random() * 0.5 + 0.2,
+      opacity: Math.random() * 0.5 + 0.15,
+      speed: Math.random() * 0.4 + 0.2,
       phase: Math.random() * Math.PI * 2,
     }));
 
-    // Branches — neural network style
-    const branches: Branch[] = [];
-    const junctions: JunctionNode[] = [];
-    const isMobile = width < 768;
-    const maxDepth = isMobile ? 5 : 6;
-
-    function generateBranches(
-      sx: number, sy: number,
-      angle: number, length: number,
-      thickness: number, depth: number,
-      hue: number
-    ) {
-      if (depth > maxDepth || length < 10) return;
-
-      const endX = sx + Math.cos(angle) * length;
-      const endY = sy + Math.sin(angle) * length;
-
-      const spread = length * 0.35;
-      const cp1x = sx + Math.cos(angle) * length * 0.3 + (Math.random() - 0.5) * spread;
-      const cp1y = sy + Math.sin(angle) * length * 0.3 + (Math.random() - 0.5) * spread;
-      const cp2x = sx + Math.cos(angle) * length * 0.7 + (Math.random() - 0.5) * spread;
-      const cp2y = sy + Math.sin(angle) * length * 0.7 + (Math.random() - 0.5) * spread;
-
-      branches.push({
-        startX: sx, startY: sy,
-        endX, endY,
-        cp1x, cp1y, cp2x, cp2y,
-        thickness,
-        depth,
-        hue,
-        phase: Math.random() * Math.PI * 2,
-      });
-
-      // Add glowing junction node at branch endpoint
-      if (depth <= maxDepth) {
-        junctions.push({
-          x: endX, y: endY,
-          size: Math.max(1.5, thickness * 0.8),
-          depth,
-          phase: Math.random() * Math.PI * 2,
-        });
-      }
-
-      const childCount = depth < 2 ? 3 : depth < 4 ? 2 + (Math.random() > 0.5 ? 1 : 0) : 2;
-      const angleSpread = depth < 2 ? 0.7 + Math.random() * 0.4 : 0.5 + Math.random() * 0.5;
-
-      for (let i = 0; i < childCount; i++) {
-        const childAngle = angle + (i - (childCount - 1) / 2) * angleSpread + (Math.random() - 0.5) * 0.25;
-        const childLen = length * (0.58 + Math.random() * 0.18);
-        const childThick = thickness * (depth < 1 ? 0.7 : 0.55);
-        const childHue = hue + (Math.random() - 0.5) * 15;
-        generateBranches(endX, endY, childAngle, childLen, childThick, depth + 1, childHue);
-      }
-    }
-
     const cx = width / 2;
     const cy = height / 2;
-    const baseLength = Math.min(width, height) * (isMobile ? 0.22 : 0.3);
-    const baseThickness = isMobile ? 6 : 8;
+    const isMobile = width < 768;
+    const reach = Math.min(width, height) * (isMobile ? 0.42 : 0.48);
 
-    // Add center junction
-    junctions.push({ x: cx, y: cy, size: 10, depth: -1, phase: 0 });
-
-    // 10 directions radiating from center
-    const rootCount = isMobile ? 8 : 10;
-    for (let i = 0; i < rootCount; i++) {
-      const angle = (Math.PI * 2 * i) / rootCount + (Math.random() - 0.5) * 0.3;
-      const hue = 28 + i * 5;
-      const len = baseLength * (0.85 + Math.random() * 0.3);
-      generateBranches(cx, cy, angle, len, baseThickness, 0, hue);
+    // ── Main tendrils: smooth flowing cosmic veins ──
+    const tendrilCount = isMobile ? 7 : 9;
+    const tendrils: Tendril[] = [];
+    for (let i = 0; i < tendrilCount; i++) {
+      const baseAngle = (Math.PI * 2 * i) / tendrilCount;
+      tendrils.push({
+        angle: baseAngle + (Math.random() - 0.5) * 0.15,
+        length: reach * (0.8 + Math.random() * 0.4),
+        thickness: isMobile ? 5 + Math.random() * 3 : 7 + Math.random() * 5,
+        waveFreq: 1.5 + Math.random() * 1.5,
+        waveAmp: 20 + Math.random() * 30,
+        phase: Math.random() * Math.PI * 2,
+        hue: 28 + Math.random() * 20,
+        segments: 80,
+      });
     }
 
-    // Particles
-    const particles: Particle[] = Array.from({ length: 120 }, () => ({
-      progress: Math.random(),
-      speed: 0.0015 + Math.random() * 0.004,
-      branchIndex: Math.floor(Math.random() * branches.length),
-    }));
+    // ── Sub-tendrils branching off main ones ──
+    const subTendrils: SubTendril[] = [];
+    tendrils.forEach((_, pi) => {
+      const subCount = 2 + Math.floor(Math.random() * 3);
+      for (let j = 0; j < subCount; j++) {
+        subTendrils.push({
+          parentIdx: pi,
+          startT: 0.25 + Math.random() * 0.5,
+          angle: (Math.random() > 0.5 ? 1 : -1) * (0.3 + Math.random() * 0.6),
+          length: reach * (0.15 + Math.random() * 0.25),
+          thickness: 2 + Math.random() * 2.5,
+          waveFreq: 2 + Math.random() * 2,
+          waveAmp: 8 + Math.random() * 15,
+          phase: Math.random() * Math.PI * 2,
+          hue: 28 + Math.random() * 25,
+        });
+      }
+    });
+
+    // Helper: get point on tendril at t (0→1)
+    function getTendrilPoint(
+      td: Tendril, t: number, time: number,
+      offsetX: number, offsetY: number
+    ) {
+      const dist = t * td.length;
+      const wave = Math.sin(t * td.waveFreq * Math.PI + time * 0.3 + td.phase) * td.waveAmp * t;
+      const perpAngle = td.angle + Math.PI / 2;
+      const x = cx + Math.cos(td.angle) * dist + Math.cos(perpAngle) * wave + offsetX * t;
+      const y = cy + Math.sin(td.angle) * dist + Math.sin(perpAngle) * wave + offsetY * t;
+      return { x, y };
+    }
+
+    // Energy pulses
+    interface Pulse {
+      tendrilIdx: number;
+      progress: number;
+      speed: number;
+      brightness: number;
+    }
+    const pulses: Pulse[] = [];
+    for (let i = 0; i < (isMobile ? 25 : 40); i++) {
+      pulses.push({
+        tendrilIdx: Math.floor(Math.random() * tendrils.length),
+        progress: Math.random(),
+        speed: 0.002 + Math.random() * 0.005,
+        brightness: 0.5 + Math.random() * 0.5,
+      });
+    }
 
     let time = 0;
 
     function draw() {
-      time += 0.006;
+      time += 0.005;
       ctx.clearRect(0, 0, width, height);
 
       // Background
@@ -179,178 +167,213 @@ export default function CosmicCanvas() {
 
       // Stars
       for (const s of stars) {
-        const twinkle = Math.sin(time * s.speed + s.phase) * 0.3 + 0.7;
+        const twinkle = Math.sin(time * s.speed * 2 + s.phase) * 0.3 + 0.7;
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(255, 255, 255, ${s.opacity * twinkle})`;
         ctx.fill();
       }
 
-      const mx = (mouseRef.current.x - 0.5) * 6;
-      const my = (mouseRef.current.y - 0.5) * 6;
-      const pulse = Math.sin(time * 0.35) * 0.12 + 1;
+      const mx = (mouseRef.current.x - 0.5) * 20;
+      const my = (mouseRef.current.y - 0.5) * 20;
+      const pulse = Math.sin(time * 0.35) * 0.1 + 1;
 
-      // ── Center glow (4 layers) ──
-      // Layer 1: Ultra-wide cosmic halo
-      const ultraSize = Math.min(width, height) * 0.5 * pulse;
-      const ultra = ctx.createRadialGradient(cx, cy, 0, cx, cy, ultraSize);
-      ultra.addColorStop(0, "rgba(212, 168, 83, 0.08)");
-      ultra.addColorStop(0.3, "rgba(179, 136, 255, 0.03)");
-      ultra.addColorStop(1, "transparent");
-      ctx.fillStyle = ultra;
+      // ── Center glow ──
+      // Ultra-wide halo
+      const haloR = Math.min(width, height) * 0.45 * pulse;
+      const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, haloR);
+      halo.addColorStop(0, "rgba(212, 168, 83, 0.06)");
+      halo.addColorStop(0.4, "rgba(120, 90, 200, 0.02)");
+      halo.addColorStop(1, "transparent");
+      ctx.fillStyle = halo;
       ctx.fillRect(0, 0, width, height);
 
-      // Layer 2: Warm glow
-      const warmSize = 180 * pulse;
-      const warm = ctx.createRadialGradient(cx, cy, 0, cx, cy, warmSize);
-      warm.addColorStop(0, "rgba(255, 220, 140, 0.5)");
-      warm.addColorStop(0.2, "rgba(212, 168, 83, 0.3)");
-      warm.addColorStop(0.5, "rgba(212, 168, 83, 0.08)");
-      warm.addColorStop(1, "transparent");
-      ctx.fillStyle = warm;
-      ctx.fillRect(cx - warmSize, cy - warmSize, warmSize * 2, warmSize * 2);
-
-      // Layer 3: Hot core
-      const hotSize = 50 + Math.sin(time * 0.5) * 10;
-      const hot = ctx.createRadialGradient(cx, cy, 0, cx, cy, hotSize);
-      hot.addColorStop(0, "rgba(255, 250, 235, 1)");
-      hot.addColorStop(0.1, "rgba(255, 240, 200, 0.95)");
-      hot.addColorStop(0.3, "rgba(255, 210, 130, 0.6)");
-      hot.addColorStop(0.6, "rgba(212, 168, 83, 0.2)");
-      hot.addColorStop(1, "transparent");
-      ctx.fillStyle = hot;
-      ctx.fillRect(cx - hotSize, cy - hotSize, hotSize * 2, hotSize * 2);
-
-      // Layer 4: White-hot pinpoint
-      const pinSize = 12 + Math.sin(time * 0.8) * 3;
-      const pin = ctx.createRadialGradient(cx, cy, 0, cx, cy, pinSize);
-      pin.addColorStop(0, "rgba(255, 255, 255, 1)");
-      pin.addColorStop(0.4, "rgba(255, 245, 220, 0.8)");
-      pin.addColorStop(1, "transparent");
-      ctx.fillStyle = pin;
-      ctx.fillRect(cx - pinSize, cy - pinSize, pinSize * 2, pinSize * 2);
-
-      // ── Draw branches (neural network lines) ──
       ctx.globalCompositeOperation = "lighter";
 
-      for (const b of branches) {
-        const breathe = Math.sin(time * 0.25 + b.phase) * 0.12 + 0.88;
-        const depthFade = 1 - b.depth / (maxDepth + 1);
-        const alpha = depthFade * 0.8 * breathe;
+      // ── Draw tendrils ──
+      for (const td of tendrils) {
+        const breathe = Math.sin(time * 0.2 + td.phase) * 0.08 + 0.92;
 
-        const offsetX = mx * (b.depth * 0.4);
-        const offsetY = my * (b.depth * 0.4);
+        // Build path points
+        const points: { x: number; y: number }[] = [];
+        for (let i = 0; i <= td.segments; i++) {
+          const t = i / td.segments;
+          points.push(getTendrilPoint(td, t, time, mx, my));
+        }
 
-        const sx = b.startX + offsetX;
-        const sy = b.startY + offsetY;
-        const ex = b.endX + offsetX;
-        const ey = b.endY + offsetY;
-        const c1x = b.cp1x + offsetX;
-        const c1y = b.cp1y + offsetY;
-        const c2x = b.cp2x + offsetX;
-        const c2y = b.cp2y + offsetY;
+        // Pass 1: Ultra-wide soft glow
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+          ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.strokeStyle = `hsla(${td.hue}, 60%, 55%, 0.06)`;
+        ctx.lineWidth = td.thickness * breathe * 12;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
 
-        // Pass 1: Wide soft glow (neural glow)
-        if (b.depth < 3) {
+        // Pass 2: Wide glow
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+          ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.strokeStyle = `hsla(${td.hue}, 65%, 58%, 0.12)`;
+        ctx.lineWidth = td.thickness * breathe * 5;
+        ctx.stroke();
+
+        // Pass 3: Medium glow
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+          ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.strokeStyle = `hsla(${td.hue}, 70%, 62%, 0.3)`;
+        ctx.lineWidth = td.thickness * breathe * 2.2;
+        ctx.stroke();
+
+        // Pass 4: Bright core with taper
+        for (let i = 0; i < points.length - 1; i++) {
+          const t = i / points.length;
+          const taper = 1 - t * 0.7; // thicker near center
+          const segAlpha = (1 - t * 0.5) * breathe;
+
           ctx.beginPath();
-          ctx.moveTo(sx, sy);
-          ctx.bezierCurveTo(c1x, c1y, c2x, c2y, ex, ey);
-          ctx.strokeStyle = `hsla(${b.hue}, 65%, 60%, ${alpha * 0.15})`;
-          ctx.lineWidth = b.thickness * breathe * 6;
+          ctx.moveTo(points[i].x, points[i].y);
+          ctx.lineTo(points[i + 1].x, points[i + 1].y);
+          ctx.strokeStyle = `hsla(${td.hue}, 80%, 75%, ${segAlpha * 0.85})`;
+          ctx.lineWidth = td.thickness * taper * breathe;
           ctx.lineCap = "round";
           ctx.stroke();
         }
 
-        // Pass 2: Medium glow
-        ctx.beginPath();
-        ctx.moveTo(sx, sy);
-        ctx.bezierCurveTo(c1x, c1y, c2x, c2y, ex, ey);
-        ctx.strokeStyle = `hsla(${b.hue}, 70%, 60%, ${alpha * 0.35})`;
-        ctx.lineWidth = b.thickness * breathe * 2.5;
-        ctx.lineCap = "round";
-        ctx.stroke();
+        // Pass 5: White-hot center line (inner 40%)
+        for (let i = 0; i < Math.floor(points.length * 0.4); i++) {
+          const t = i / points.length;
+          const segAlpha = (1 - t * 2) * breathe;
+          if (segAlpha <= 0) break;
 
-        // Pass 3: Bright core line
-        ctx.beginPath();
-        ctx.moveTo(sx, sy);
-        ctx.bezierCurveTo(c1x, c1y, c2x, c2y, ex, ey);
-        const grad = ctx.createLinearGradient(sx, sy, ex, ey);
-        grad.addColorStop(0, `hsla(${b.hue}, 75%, 72%, ${alpha})`);
-        grad.addColorStop(1, `hsla(${b.hue + 20}, 65%, 62%, ${alpha * 0.7})`);
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = b.thickness * breathe;
-        ctx.lineCap = "round";
-        ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(points[i].x, points[i].y);
+          ctx.lineTo(points[i + 1].x, points[i + 1].y);
+          ctx.strokeStyle = `rgba(255, 248, 230, ${segAlpha * 0.5})`;
+          ctx.lineWidth = td.thickness * 0.4 * (1 - t);
+          ctx.lineCap = "round";
+          ctx.stroke();
+        }
       }
 
-      // ── Junction nodes (synaptic glow) ──
-      for (const j of junctions) {
-        const offsetX = mx * (Math.max(0, j.depth) * 0.4);
-        const offsetY = my * (Math.max(0, j.depth) * 0.4);
-        const jx = j.x + offsetX;
-        const jy = j.y + offsetY;
-        const depthFade = 1 - Math.max(0, j.depth) / (maxDepth + 1);
-        const jPulse = Math.sin(time * 0.4 + j.phase) * 0.2 + 0.8;
-        const jAlpha = depthFade * 0.6 * jPulse;
+      // ── Draw sub-tendrils ──
+      for (const st of subTendrils) {
+        const parent = tendrils[st.parentIdx];
+        const branchPt = getTendrilPoint(parent, st.startT, time, mx, my);
+        const branchAngle = parent.angle + st.angle;
+        const breathe = Math.sin(time * 0.25 + st.phase) * 0.1 + 0.9;
 
-        if (j.depth < 3) {
-          // Outer glow
-          const glowR = j.size * 5;
-          const glow = ctx.createRadialGradient(jx, jy, 0, jx, jy, glowR);
-          glow.addColorStop(0, `rgba(255, 220, 150, ${jAlpha * 0.4})`);
-          glow.addColorStop(0.4, `rgba(212, 168, 83, ${jAlpha * 0.12})`);
-          glow.addColorStop(1, "transparent");
-          ctx.fillStyle = glow;
-          ctx.fillRect(jx - glowR, jy - glowR, glowR * 2, glowR * 2);
+        const subPoints: { x: number; y: number }[] = [];
+        const subSegs = 40;
+        for (let i = 0; i <= subSegs; i++) {
+          const t = i / subSegs;
+          const dist = t * st.length;
+          const wave = Math.sin(t * st.waveFreq * Math.PI + time * 0.4 + st.phase) * st.waveAmp * t;
+          const perpAngle = branchAngle + Math.PI / 2;
+          subPoints.push({
+            x: branchPt.x + Math.cos(branchAngle) * dist + Math.cos(perpAngle) * wave,
+            y: branchPt.y + Math.sin(branchAngle) * dist + Math.sin(perpAngle) * wave,
+          });
         }
 
-        // Bright dot
+        // Soft glow
         ctx.beginPath();
-        ctx.arc(jx, jy, j.size * jPulse, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 240, 200, ${jAlpha})`;
-        ctx.fill();
+        ctx.moveTo(subPoints[0].x, subPoints[0].y);
+        for (let i = 1; i < subPoints.length; i++) ctx.lineTo(subPoints[i].x, subPoints[i].y);
+        ctx.strokeStyle = `hsla(${st.hue}, 60%, 55%, 0.08)`;
+        ctx.lineWidth = st.thickness * breathe * 4;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+
+        // Core
+        for (let i = 0; i < subPoints.length - 1; i++) {
+          const t = i / subPoints.length;
+          const taper = 1 - t * 0.8;
+          const segAlpha = (1 - t * 0.6) * breathe * 0.6;
+          ctx.beginPath();
+          ctx.moveTo(subPoints[i].x, subPoints[i].y);
+          ctx.lineTo(subPoints[i + 1].x, subPoints[i + 1].y);
+          ctx.strokeStyle = `hsla(${st.hue}, 75%, 70%, ${segAlpha})`;
+          ctx.lineWidth = st.thickness * taper * breathe;
+          ctx.lineCap = "round";
+          ctx.stroke();
+        }
       }
 
-      // ── Particles (energy flowing through network) ──
-      for (const p of particles) {
+      // ── Energy pulses ──
+      for (const p of pulses) {
         p.progress += p.speed;
         if (p.progress > 1) {
           p.progress = 0;
-          p.branchIndex = Math.floor(Math.random() * branches.length);
+          p.tendrilIdx = Math.floor(Math.random() * tendrils.length);
+          p.brightness = 0.5 + Math.random() * 0.5;
         }
 
-        const b = branches[p.branchIndex];
-        if (!b) continue;
+        const td = tendrils[p.tendrilIdx];
+        const pt = getTendrilPoint(td, p.progress, time, mx, my);
+        const fadeIn = Math.min(1, p.progress * 5);
+        const fadeOut = 1 - p.progress * 0.3;
+        const alpha = fadeIn * fadeOut * p.brightness;
+        const size = (3 + (1 - p.progress) * 3) * (td.thickness / 8);
 
-        const t = p.progress;
-        const mt = 1 - t;
-        const offsetX = mx * (b.depth * 0.4);
-        const offsetY = my * (b.depth * 0.4);
-
-        const px = mt * mt * mt * b.startX + 3 * mt * mt * t * b.cp1x + 3 * mt * t * t * b.cp2x + t * t * t * b.endX + offsetX;
-        const py = mt * mt * mt * b.startY + 3 * mt * mt * t * b.cp1y + 3 * mt * t * t * b.cp2y + t * t * t * b.endY + offsetY;
-
-        const depthFade = 1 - b.depth / (maxDepth + 1);
-        const size = (2.5 + (1 - t) * 2) * depthFade;
-        const pAlpha = (1 - t * 0.4) * depthFade;
-
-        // Particle glow
-        const glowR = size * 4;
-        const pg = ctx.createRadialGradient(px, py, 0, px, py, glowR);
-        pg.addColorStop(0, `rgba(255, 235, 190, ${0.7 * pAlpha})`);
-        pg.addColorStop(0.4, `rgba(212, 168, 83, ${0.25 * pAlpha})`);
+        // Glow
+        const glowR = size * 6;
+        const pg = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, glowR);
+        pg.addColorStop(0, `rgba(255, 235, 190, ${0.5 * alpha})`);
+        pg.addColorStop(0.3, `rgba(212, 168, 83, ${0.15 * alpha})`);
         pg.addColorStop(1, "transparent");
         ctx.fillStyle = pg;
-        ctx.fillRect(px - glowR, py - glowR, glowR * 2, glowR * 2);
+        ctx.fillRect(pt.x - glowR, pt.y - glowR, glowR * 2, glowR * 2);
 
-        // Bright core
+        // Bright dot
         ctx.beginPath();
-        ctx.arc(px, py, size * 0.4, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 248, 220, ${0.95 * pAlpha})`;
+        ctx.arc(pt.x, pt.y, size * 0.5, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 250, 235, ${0.9 * alpha})`;
         ctx.fill();
       }
 
       ctx.globalCompositeOperation = "source-over";
+
+      // ── Center blazing core (drawn last, on top) ──
+      // Warm glow
+      const warmR = 160 * pulse;
+      const warmG = ctx.createRadialGradient(cx, cy, 0, cx, cy, warmR);
+      warmG.addColorStop(0, "rgba(255, 220, 140, 0.45)");
+      warmG.addColorStop(0.15, "rgba(212, 168, 83, 0.25)");
+      warmG.addColorStop(0.4, "rgba(212, 168, 83, 0.06)");
+      warmG.addColorStop(1, "transparent");
+      ctx.fillStyle = warmG;
+      ctx.fillRect(cx - warmR, cy - warmR, warmR * 2, warmR * 2);
+
+      // Hot core
+      const hotR = 55 + Math.sin(time * 0.5) * 8;
+      const hotG = ctx.createRadialGradient(cx, cy, 0, cx, cy, hotR);
+      hotG.addColorStop(0, "rgba(255, 250, 240, 1)");
+      hotG.addColorStop(0.1, "rgba(255, 240, 210, 0.9)");
+      hotG.addColorStop(0.35, "rgba(255, 200, 120, 0.4)");
+      hotG.addColorStop(0.7, "rgba(212, 168, 83, 0.08)");
+      hotG.addColorStop(1, "transparent");
+      ctx.fillStyle = hotG;
+      ctx.fillRect(cx - hotR, cy - hotR, hotR * 2, hotR * 2);
+
+      // Blazing white center
+      const whiteR = 15 + Math.sin(time * 0.7) * 4;
+      const whiteG = ctx.createRadialGradient(cx, cy, 0, cx, cy, whiteR);
+      whiteG.addColorStop(0, "rgba(255, 255, 255, 1)");
+      whiteG.addColorStop(0.5, "rgba(255, 250, 230, 0.7)");
+      whiteG.addColorStop(1, "transparent");
+      ctx.fillStyle = whiteG;
+      ctx.fillRect(cx - whiteR, cy - whiteR, whiteR * 2, whiteR * 2);
+
       animRef.current = requestAnimationFrame(draw);
     }
 
@@ -359,7 +382,8 @@ export default function CosmicCanvas() {
     return () => {
       cancelAnimationFrame(animRef.current);
       window.removeEventListener("resize", resize);
-      window.removeEventListener("mousemove", handleMouse);
+      window.removeEventListener("mousemove", handleMouse as EventListener);
+      window.removeEventListener("touchmove", handleMouse as EventListener);
     };
   }, []);
 
