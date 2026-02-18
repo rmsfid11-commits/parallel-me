@@ -2,41 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
-interface Star {
-  x: number;
-  y: number;
-  size: number;
-  opacity: number;
-  speed: number;
-  phase: number;
-}
-
-interface Tendril {
-  angle: number;       // base angle from center
-  length: number;      // how far it reaches
-  thickness: number;   // base thickness
-  waveFreq: number;    // sine wave frequency for organic curve
-  waveAmp: number;     // sine wave amplitude
-  phase: number;       // animation phase offset
-  hue: number;
-  segments: number;    // resolution
-}
-
-interface SubTendril {
-  parentIdx: number;
-  startT: number;      // where on parent it branches (0-1)
-  angle: number;       // offset angle
-  length: number;
-  thickness: number;
-  waveFreq: number;
-  waveAmp: number;
-  phase: number;
-  hue: number;
-}
-
 export default function CosmicCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const mouseRef = useRef({ x: 0.5, y: 0.5 });
   const animRef = useRef<number>(0);
 
   useEffect(() => {
@@ -61,318 +28,220 @@ export default function CosmicCanvas() {
     resize();
     window.addEventListener("resize", resize);
 
-    const handleMouse = (e: MouseEvent | TouchEvent) => {
-      const pt = "touches" in e ? e.touches[0] : e;
-      if (pt) mouseRef.current = { x: pt.clientX / width, y: pt.clientY / height };
-    };
-    window.addEventListener("mousemove", handleMouse as EventListener);
-    window.addEventListener("touchmove", handleMouse as EventListener, { passive: true });
-
-    // Stars
-    const starCount = Math.min(300, Math.floor((width * height) / 4000));
-    const stars: Star[] = Array.from({ length: starCount }, () => ({
-      x: Math.random() * width,
-      y: Math.random() * height,
-      size: Math.random() * 1.8 + 0.3,
-      opacity: Math.random() * 0.5 + 0.15,
-      speed: Math.random() * 0.4 + 0.2,
-      phase: Math.random() * Math.PI * 2,
-    }));
-
     const cx = width / 2;
     const cy = height / 2;
-    const isMobile = width < 768;
-    const reach = Math.min(width, height) * (isMobile ? 0.42 : 0.48);
 
-    // ── Main tendrils: smooth flowing cosmic veins ──
-    const tendrilCount = isMobile ? 7 : 9;
-    const tendrils: Tendril[] = [];
-    for (let i = 0; i < tendrilCount; i++) {
-      const baseAngle = (Math.PI * 2 * i) / tendrilCount;
-      tendrils.push({
-        angle: baseAngle + (Math.random() - 0.5) * 0.15,
-        length: reach * (0.8 + Math.random() * 0.4),
-        thickness: isMobile ? 5 + Math.random() * 3 : 7 + Math.random() * 5,
-        waveFreq: 1.5 + Math.random() * 1.5,
-        waveAmp: 20 + Math.random() * 30,
+    // ── Premium stars with glow ──
+    interface Star {
+      x: number; y: number;
+      size: number;
+      glowSize: number;
+      speed: number; phase: number;
+      r: number; g: number; b: number;
+      hasFlare: boolean;
+    }
+
+    const stars: Star[] = [];
+    // Tiny dim dust (lots)
+    for (let i = 0; i < 180; i++) {
+      stars.push({
+        x: Math.random() * width, y: Math.random() * height,
+        size: Math.random() * 0.8 + 0.3,
+        glowSize: 0,
+        speed: 0.3 + Math.random() * 0.5,
         phase: Math.random() * Math.PI * 2,
-        hue: 28 + Math.random() * 20,
-        segments: 80,
+        r: 200 + Math.random() * 55, g: 200 + Math.random() * 55, b: 220 + Math.random() * 35,
+        hasFlare: false,
+      });
+    }
+    // Medium stars with subtle glow
+    for (let i = 0; i < 40; i++) {
+      stars.push({
+        x: Math.random() * width, y: Math.random() * height,
+        size: Math.random() * 1.2 + 0.8,
+        glowSize: 4 + Math.random() * 4,
+        speed: 0.2 + Math.random() * 0.4,
+        phase: Math.random() * Math.PI * 2,
+        r: 230 + Math.random() * 25, g: 225 + Math.random() * 30, b: 240,
+        hasFlare: false,
+      });
+    }
+    // Bright stars with cross flare
+    for (let i = 0; i < 12; i++) {
+      const isGold = Math.random() > 0.5;
+      stars.push({
+        x: Math.random() * width, y: Math.random() * height,
+        size: Math.random() * 1.5 + 1.5,
+        glowSize: 10 + Math.random() * 8,
+        speed: 0.15 + Math.random() * 0.3,
+        phase: Math.random() * Math.PI * 2,
+        r: isGold ? 212 : 200, g: isGold ? 168 : 190, b: isGold ? 83 : 255,
+        hasFlare: true,
       });
     }
 
-    // ── Sub-tendrils branching off main ones ──
-    const subTendrils: SubTendril[] = [];
-    tendrils.forEach((_, pi) => {
-      const subCount = 2 + Math.floor(Math.random() * 3);
-      for (let j = 0; j < subCount; j++) {
-        subTendrils.push({
-          parentIdx: pi,
-          startT: 0.25 + Math.random() * 0.5,
-          angle: (Math.random() > 0.5 ? 1 : -1) * (0.3 + Math.random() * 0.6),
-          length: reach * (0.15 + Math.random() * 0.25),
-          thickness: 2 + Math.random() * 2.5,
-          waveFreq: 2 + Math.random() * 2,
-          waveAmp: 8 + Math.random() * 15,
-          phase: Math.random() * Math.PI * 2,
-          hue: 28 + Math.random() * 25,
-        });
-      }
-    });
-
-    // Helper: get point on tendril at t (0→1)
-    function getTendrilPoint(
-      td: Tendril, t: number, time: number,
-      offsetX: number, offsetY: number
-    ) {
-      const dist = t * td.length;
-      const wave = Math.sin(t * td.waveFreq * Math.PI + time * 0.3 + td.phase) * td.waveAmp * t;
-      const perpAngle = td.angle + Math.PI / 2;
-      const x = cx + Math.cos(td.angle) * dist + Math.cos(perpAngle) * wave + offsetX * t;
-      const y = cy + Math.sin(td.angle) * dist + Math.sin(perpAngle) * wave + offsetY * t;
-      return { x, y };
-    }
-
-    // Energy pulses
-    interface Pulse {
-      tendrilIdx: number;
-      progress: number;
+    // ── Particles emanating from center ──
+    interface Particle {
+      angle: number;
+      dist: number;
       speed: number;
-      brightness: number;
+      maxDist: number;
+      size: number;
+      opacity: number;
+      hue: number; // 0 = gold, 1 = purple
     }
-    const pulses: Pulse[] = [];
-    for (let i = 0; i < (isMobile ? 25 : 40); i++) {
-      pulses.push({
-        tendrilIdx: Math.floor(Math.random() * tendrils.length),
-        progress: Math.random(),
-        speed: 0.002 + Math.random() * 0.005,
-        brightness: 0.5 + Math.random() * 0.5,
+
+    const maxParticleDist = Math.max(width, height) * 0.55;
+    const particleCount = width < 768 ? 50 : 80;
+    const particles: Particle[] = [];
+    for (let i = 0; i < particleCount; i++) {
+      particles.push({
+        angle: Math.random() * Math.PI * 2,
+        dist: Math.random() * maxParticleDist,
+        speed: 0.15 + Math.random() * 0.4,
+        maxDist: maxParticleDist * (0.7 + Math.random() * 0.3),
+        size: 1 + Math.random() * 2,
+        opacity: 0.3 + Math.random() * 0.7,
+        hue: Math.random() > 0.3 ? 0 : 1,
       });
     }
 
     let time = 0;
 
     function draw() {
-      time += 0.005;
+      time += 0.006;
       ctx.clearRect(0, 0, width, height);
 
-      // Background
-      const bgGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, height) * 0.75);
-      bgGrad.addColorStop(0, "#0c0828");
-      bgGrad.addColorStop(0.3, "#070520");
-      bgGrad.addColorStop(0.7, "#030315");
-      bgGrad.addColorStop(1, "#010110");
-      ctx.fillStyle = bgGrad;
+      // Background — subtle radial gradient
+      const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, height) * 0.7);
+      bg.addColorStop(0, "#0a0720");
+      bg.addColorStop(0.4, "#060418");
+      bg.addColorStop(1, "#020112");
+      ctx.fillStyle = bg;
       ctx.fillRect(0, 0, width, height);
 
-      // Stars
+      // ── Stars ──
       for (const s of stars) {
-        const twinkle = Math.sin(time * s.speed * 2 + s.phase) * 0.3 + 0.7;
+        const twinkle = Math.sin(time * s.speed * 2 + s.phase) * 0.35 + 0.65;
+        const alpha = twinkle;
+
+        // Soft glow halo
+        if (s.glowSize > 0) {
+          const glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.glowSize);
+          glow.addColorStop(0, `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha * 0.15})`);
+          glow.addColorStop(1, "transparent");
+          ctx.fillStyle = glow;
+          ctx.fillRect(s.x - s.glowSize, s.y - s.glowSize, s.glowSize * 2, s.glowSize * 2);
+        }
+
+        // Cross flare for bright stars
+        if (s.hasFlare) {
+          const flareLen = s.size * 6 * twinkle;
+          const flareAlpha = alpha * 0.25;
+          ctx.strokeStyle = `rgba(${s.r}, ${s.g}, ${s.b}, ${flareAlpha})`;
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(s.x - flareLen, s.y);
+          ctx.lineTo(s.x + flareLen, s.y);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(s.x, s.y - flareLen);
+          ctx.lineTo(s.x, s.y + flareLen);
+          ctx.stroke();
+        }
+
+        // Star dot
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 255, 255, ${s.opacity * twinkle})`;
+        ctx.fillStyle = `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha})`;
         ctx.fill();
       }
 
-      const mx = (mouseRef.current.x - 0.5) * 20;
-      const my = (mouseRef.current.y - 0.5) * 20;
+      // ── Center glow ──
       const pulse = Math.sin(time * 0.35) * 0.1 + 1;
 
-      // ── Center glow ──
-      // Ultra-wide halo
-      const haloR = Math.min(width, height) * 0.45 * pulse;
+      // Wide halo
+      const haloR = Math.min(width, height) * 0.4 * pulse;
       const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, haloR);
-      halo.addColorStop(0, "rgba(212, 168, 83, 0.06)");
-      halo.addColorStop(0.4, "rgba(120, 90, 200, 0.02)");
+      halo.addColorStop(0, "rgba(212, 168, 83, 0.07)");
+      halo.addColorStop(0.3, "rgba(140, 100, 200, 0.02)");
       halo.addColorStop(1, "transparent");
       ctx.fillStyle = halo;
       ctx.fillRect(0, 0, width, height);
 
+      // Warm mid glow
+      const midR = 130 * pulse;
+      const mid = ctx.createRadialGradient(cx, cy, 0, cx, cy, midR);
+      mid.addColorStop(0, "rgba(255, 220, 140, 0.4)");
+      mid.addColorStop(0.2, "rgba(212, 168, 83, 0.2)");
+      mid.addColorStop(0.5, "rgba(212, 168, 83, 0.05)");
+      mid.addColorStop(1, "transparent");
+      ctx.fillStyle = mid;
+      ctx.fillRect(cx - midR, cy - midR, midR * 2, midR * 2);
+
+      // Hot core
+      const hotR = 40 + Math.sin(time * 0.5) * 6;
+      const hot = ctx.createRadialGradient(cx, cy, 0, cx, cy, hotR);
+      hot.addColorStop(0, "rgba(255, 250, 240, 1)");
+      hot.addColorStop(0.12, "rgba(255, 240, 210, 0.85)");
+      hot.addColorStop(0.35, "rgba(255, 200, 120, 0.35)");
+      hot.addColorStop(0.7, "rgba(212, 168, 83, 0.06)");
+      hot.addColorStop(1, "transparent");
+      ctx.fillStyle = hot;
+      ctx.fillRect(cx - hotR, cy - hotR, hotR * 2, hotR * 2);
+
+      // White pinpoint
+      const pinR = 10 + Math.sin(time * 0.7) * 2;
+      const pin = ctx.createRadialGradient(cx, cy, 0, cx, cy, pinR);
+      pin.addColorStop(0, "rgba(255, 255, 255, 1)");
+      pin.addColorStop(0.5, "rgba(255, 248, 230, 0.6)");
+      pin.addColorStop(1, "transparent");
+      ctx.fillStyle = pin;
+      ctx.fillRect(cx - pinR, cy - pinR, pinR * 2, pinR * 2);
+
+      // ── Particles radiating outward ──
       ctx.globalCompositeOperation = "lighter";
 
-      // ── Draw tendrils ──
-      for (const td of tendrils) {
-        const breathe = Math.sin(time * 0.2 + td.phase) * 0.08 + 0.92;
-
-        // Build path points
-        const points: { x: number; y: number }[] = [];
-        for (let i = 0; i <= td.segments; i++) {
-          const t = i / td.segments;
-          points.push(getTendrilPoint(td, t, time, mx, my));
+      for (const p of particles) {
+        p.dist += p.speed;
+        if (p.dist > p.maxDist) {
+          p.dist = 0;
+          p.angle = Math.random() * Math.PI * 2;
+          p.opacity = 0.3 + Math.random() * 0.7;
         }
 
-        // Pass 1: Ultra-wide soft glow
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-          ctx.lineTo(points[i].x, points[i].y);
-        }
-        ctx.strokeStyle = `hsla(${td.hue}, 60%, 55%, 0.06)`;
-        ctx.lineWidth = td.thickness * breathe * 12;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.stroke();
+        const px = cx + Math.cos(p.angle) * p.dist;
+        const py = cy + Math.sin(p.angle) * p.dist;
 
-        // Pass 2: Wide glow
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-          ctx.lineTo(points[i].x, points[i].y);
-        }
-        ctx.strokeStyle = `hsla(${td.hue}, 65%, 58%, 0.12)`;
-        ctx.lineWidth = td.thickness * breathe * 5;
-        ctx.stroke();
+        // Fade: bright near center, fade out at edges
+        const lifeT = p.dist / p.maxDist;
+        const fadeIn = Math.min(1, lifeT * 8);
+        const fadeOut = 1 - lifeT;
+        const alpha = fadeIn * fadeOut * fadeOut * p.opacity;
 
-        // Pass 3: Medium glow
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-          ctx.lineTo(points[i].x, points[i].y);
-        }
-        ctx.strokeStyle = `hsla(${td.hue}, 70%, 62%, 0.3)`;
-        ctx.lineWidth = td.thickness * breathe * 2.2;
-        ctx.stroke();
+        if (alpha < 0.01) continue;
 
-        // Pass 4: Bright core with taper
-        for (let i = 0; i < points.length - 1; i++) {
-          const t = i / points.length;
-          const taper = 1 - t * 0.7; // thicker near center
-          const segAlpha = (1 - t * 0.5) * breathe;
-
-          ctx.beginPath();
-          ctx.moveTo(points[i].x, points[i].y);
-          ctx.lineTo(points[i + 1].x, points[i + 1].y);
-          ctx.strokeStyle = `hsla(${td.hue}, 80%, 75%, ${segAlpha * 0.85})`;
-          ctx.lineWidth = td.thickness * taper * breathe;
-          ctx.lineCap = "round";
-          ctx.stroke();
-        }
-
-        // Pass 5: White-hot center line (inner 40%)
-        for (let i = 0; i < Math.floor(points.length * 0.4); i++) {
-          const t = i / points.length;
-          const segAlpha = (1 - t * 2) * breathe;
-          if (segAlpha <= 0) break;
-
-          ctx.beginPath();
-          ctx.moveTo(points[i].x, points[i].y);
-          ctx.lineTo(points[i + 1].x, points[i + 1].y);
-          ctx.strokeStyle = `rgba(255, 248, 230, ${segAlpha * 0.5})`;
-          ctx.lineWidth = td.thickness * 0.4 * (1 - t);
-          ctx.lineCap = "round";
-          ctx.stroke();
-        }
-      }
-
-      // ── Draw sub-tendrils ──
-      for (const st of subTendrils) {
-        const parent = tendrils[st.parentIdx];
-        const branchPt = getTendrilPoint(parent, st.startT, time, mx, my);
-        const branchAngle = parent.angle + st.angle;
-        const breathe = Math.sin(time * 0.25 + st.phase) * 0.1 + 0.9;
-
-        const subPoints: { x: number; y: number }[] = [];
-        const subSegs = 40;
-        for (let i = 0; i <= subSegs; i++) {
-          const t = i / subSegs;
-          const dist = t * st.length;
-          const wave = Math.sin(t * st.waveFreq * Math.PI + time * 0.4 + st.phase) * st.waveAmp * t;
-          const perpAngle = branchAngle + Math.PI / 2;
-          subPoints.push({
-            x: branchPt.x + Math.cos(branchAngle) * dist + Math.cos(perpAngle) * wave,
-            y: branchPt.y + Math.sin(branchAngle) * dist + Math.sin(perpAngle) * wave,
-          });
-        }
+        const isGold = p.hue === 0;
+        const r = isGold ? 255 : 200;
+        const g = isGold ? 220 : 170;
+        const b = isGold ? 150 : 255;
 
         // Soft glow
+        const glowR = p.size * 5;
+        const glow = ctx.createRadialGradient(px, py, 0, px, py, glowR);
+        glow.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${alpha * 0.3})`);
+        glow.addColorStop(1, "transparent");
+        ctx.fillStyle = glow;
+        ctx.fillRect(px - glowR, py - glowR, glowR * 2, glowR * 2);
+
+        // Dot
         ctx.beginPath();
-        ctx.moveTo(subPoints[0].x, subPoints[0].y);
-        for (let i = 1; i < subPoints.length; i++) ctx.lineTo(subPoints[i].x, subPoints[i].y);
-        ctx.strokeStyle = `hsla(${st.hue}, 60%, 55%, 0.08)`;
-        ctx.lineWidth = st.thickness * breathe * 4;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.stroke();
-
-        // Core
-        for (let i = 0; i < subPoints.length - 1; i++) {
-          const t = i / subPoints.length;
-          const taper = 1 - t * 0.8;
-          const segAlpha = (1 - t * 0.6) * breathe * 0.6;
-          ctx.beginPath();
-          ctx.moveTo(subPoints[i].x, subPoints[i].y);
-          ctx.lineTo(subPoints[i + 1].x, subPoints[i + 1].y);
-          ctx.strokeStyle = `hsla(${st.hue}, 75%, 70%, ${segAlpha})`;
-          ctx.lineWidth = st.thickness * taper * breathe;
-          ctx.lineCap = "round";
-          ctx.stroke();
-        }
-      }
-
-      // ── Energy pulses ──
-      for (const p of pulses) {
-        p.progress += p.speed;
-        if (p.progress > 1) {
-          p.progress = 0;
-          p.tendrilIdx = Math.floor(Math.random() * tendrils.length);
-          p.brightness = 0.5 + Math.random() * 0.5;
-        }
-
-        const td = tendrils[p.tendrilIdx];
-        const pt = getTendrilPoint(td, p.progress, time, mx, my);
-        const fadeIn = Math.min(1, p.progress * 5);
-        const fadeOut = 1 - p.progress * 0.3;
-        const alpha = fadeIn * fadeOut * p.brightness;
-        const size = (3 + (1 - p.progress) * 3) * (td.thickness / 8);
-
-        // Glow
-        const glowR = size * 6;
-        const pg = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, glowR);
-        pg.addColorStop(0, `rgba(255, 235, 190, ${0.5 * alpha})`);
-        pg.addColorStop(0.3, `rgba(212, 168, 83, ${0.15 * alpha})`);
-        pg.addColorStop(1, "transparent");
-        ctx.fillStyle = pg;
-        ctx.fillRect(pt.x - glowR, pt.y - glowR, glowR * 2, glowR * 2);
-
-        // Bright dot
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, size * 0.5, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 250, 235, ${0.9 * alpha})`;
+        ctx.arc(px, py, p.size * (0.3 + fadeOut * 0.7), 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha * 0.9})`;
         ctx.fill();
       }
 
       ctx.globalCompositeOperation = "source-over";
-
-      // ── Center blazing core (drawn last, on top) ──
-      // Warm glow
-      const warmR = 160 * pulse;
-      const warmG = ctx.createRadialGradient(cx, cy, 0, cx, cy, warmR);
-      warmG.addColorStop(0, "rgba(255, 220, 140, 0.45)");
-      warmG.addColorStop(0.15, "rgba(212, 168, 83, 0.25)");
-      warmG.addColorStop(0.4, "rgba(212, 168, 83, 0.06)");
-      warmG.addColorStop(1, "transparent");
-      ctx.fillStyle = warmG;
-      ctx.fillRect(cx - warmR, cy - warmR, warmR * 2, warmR * 2);
-
-      // Hot core
-      const hotR = 55 + Math.sin(time * 0.5) * 8;
-      const hotG = ctx.createRadialGradient(cx, cy, 0, cx, cy, hotR);
-      hotG.addColorStop(0, "rgba(255, 250, 240, 1)");
-      hotG.addColorStop(0.1, "rgba(255, 240, 210, 0.9)");
-      hotG.addColorStop(0.35, "rgba(255, 200, 120, 0.4)");
-      hotG.addColorStop(0.7, "rgba(212, 168, 83, 0.08)");
-      hotG.addColorStop(1, "transparent");
-      ctx.fillStyle = hotG;
-      ctx.fillRect(cx - hotR, cy - hotR, hotR * 2, hotR * 2);
-
-      // Blazing white center
-      const whiteR = 15 + Math.sin(time * 0.7) * 4;
-      const whiteG = ctx.createRadialGradient(cx, cy, 0, cx, cy, whiteR);
-      whiteG.addColorStop(0, "rgba(255, 255, 255, 1)");
-      whiteG.addColorStop(0.5, "rgba(255, 250, 230, 0.7)");
-      whiteG.addColorStop(1, "transparent");
-      ctx.fillStyle = whiteG;
-      ctx.fillRect(cx - whiteR, cy - whiteR, whiteR * 2, whiteR * 2);
 
       animRef.current = requestAnimationFrame(draw);
     }
@@ -382,8 +251,6 @@ export default function CosmicCanvas() {
     return () => {
       cancelAnimationFrame(animRef.current);
       window.removeEventListener("resize", resize);
-      window.removeEventListener("mousemove", handleMouse as EventListener);
-      window.removeEventListener("touchmove", handleMouse as EventListener);
     };
   }, []);
 

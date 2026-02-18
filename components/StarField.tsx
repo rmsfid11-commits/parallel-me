@@ -3,51 +3,64 @@
 import { useEffect, useRef } from "react";
 
 interface Star {
-  x: number;
-  y: number;
+  x: number; y: number;
   size: number;
-  speed: number;   // twinkle speed
-  phase: number;    // twinkle offset
-  r: number;
-  g: number;
-  b: number;
+  glowSize: number;
+  speed: number;
+  phase: number;
+  r: number; g: number; b: number;
+  hasFlare: boolean;
 }
 
 function createStars(): Star[] {
   const stars: Star[] = [];
-  // White stars
-  for (let i = 0; i < 200; i++) {
+
+  // Tiny dust — lots, very subtle
+  for (let i = 0; i < 160; i++) {
     stars.push({
-      x: Math.random(),
-      y: Math.random(),
-      size: Math.random() * 1.8 + 0.5,
-      speed: 0.3 + Math.random() * 0.7,
+      x: Math.random(), y: Math.random(),
+      size: Math.random() * 0.7 + 0.3,
+      glowSize: 0,
+      speed: 0.3 + Math.random() * 0.5,
       phase: Math.random() * Math.PI * 2,
-      r: 255, g: 255, b: 255,
+      r: 200 + Math.random() * 55,
+      g: 200 + Math.random() * 55,
+      b: 215 + Math.random() * 40,
+      hasFlare: false,
     });
   }
-  // Gold accent
-  for (let i = 0; i < 10; i++) {
+
+  // Medium stars with soft glow halo
+  for (let i = 0; i < 35; i++) {
     stars.push({
-      x: Math.random(),
-      y: Math.random(),
-      size: Math.random() * 1.5 + 2.5,
+      x: Math.random(), y: Math.random(),
+      size: Math.random() * 1 + 0.8,
+      glowSize: 4 + Math.random() * 4,
       speed: 0.2 + Math.random() * 0.4,
       phase: Math.random() * Math.PI * 2,
-      r: 212, g: 168, b: 83,
+      r: 230 + Math.random() * 25,
+      g: 225 + Math.random() * 30,
+      b: 235 + Math.random() * 20,
+      hasFlare: false,
     });
   }
-  // Purple accent
-  for (let i = 0; i < 6; i++) {
+
+  // Bright accent stars with cross flare
+  for (let i = 0; i < 8; i++) {
+    const isGold = Math.random() > 0.4;
     stars.push({
-      x: Math.random(),
-      y: Math.random(),
-      size: Math.random() * 1.5 + 2.5,
-      speed: 0.2 + Math.random() * 0.4,
+      x: Math.random(), y: Math.random(),
+      size: Math.random() * 1.2 + 1.3,
+      glowSize: 8 + Math.random() * 6,
+      speed: 0.15 + Math.random() * 0.25,
       phase: Math.random() * Math.PI * 2,
-      r: 179, g: 136, b: 255,
+      r: isGold ? 212 : 190,
+      g: isGold ? 168 : 170,
+      b: isGold ? 83 : 255,
+      hasFlare: true,
     });
   }
+
   return stars;
 }
 
@@ -62,9 +75,16 @@ export default function StarField() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
     const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resize();
     window.addEventListener("resize", resize);
@@ -72,16 +92,45 @@ export default function StarField() {
     const stars = starsRef.current;
 
     const draw = (time: number) => {
-      const t = time * 0.001; // seconds
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const t = time * 0.001;
+      const w = canvas.width / dpr;
+      const h = canvas.height / dpr;
+      ctx.clearRect(0, 0, w, h);
 
-      for (let i = 0; i < stars.length; i++) {
-        const s = stars[i];
-        // Twinkle: oscillate opacity between 0.1 and 1.0
-        const alpha = 0.1 + 0.9 * (0.5 + 0.5 * Math.sin(t * s.speed + s.phase));
+      for (const s of stars) {
+        const twinkle = Math.sin(t * s.speed * 2 + s.phase) * 0.35 + 0.65;
+        const alpha = twinkle;
+        const sx = s.x * w;
+        const sy = s.y * h;
+
+        // Glow halo
+        if (s.glowSize > 0) {
+          const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, s.glowSize);
+          glow.addColorStop(0, `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha * 0.12})`);
+          glow.addColorStop(1, "transparent");
+          ctx.fillStyle = glow;
+          ctx.fillRect(sx - s.glowSize, sy - s.glowSize, s.glowSize * 2, s.glowSize * 2);
+        }
+
+        // Cross flare
+        if (s.hasFlare) {
+          const flareLen = s.size * 5 * twinkle;
+          ctx.strokeStyle = `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha * 0.2})`;
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(sx - flareLen, sy);
+          ctx.lineTo(sx + flareLen, sy);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(sx, sy - flareLen);
+          ctx.lineTo(sx, sy + flareLen);
+          ctx.stroke();
+        }
+
+        // Star dot
         ctx.beginPath();
-        ctx.arc(s.x * canvas.width, s.y * canvas.height, s.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${s.r},${s.g},${s.b},${alpha.toFixed(2)})`;
+        ctx.arc(sx, sy, s.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha})`;
         ctx.fill();
       }
 
