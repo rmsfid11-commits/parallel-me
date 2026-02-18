@@ -12,10 +12,19 @@ interface Star {
   hasFlare: boolean;
 }
 
+interface Mote {
+  x: number; y: number;
+  vx: number; vy: number;
+  size: number;
+  opacity: number;
+  phase: number;
+  isGold: boolean;
+}
+
 function createStars(): Star[] {
   const stars: Star[] = [];
 
-  // Tiny dust — lots, very subtle
+  // Tiny dust
   for (let i = 0; i < 160; i++) {
     stars.push({
       x: Math.random(), y: Math.random(),
@@ -30,7 +39,7 @@ function createStars(): Star[] {
     });
   }
 
-  // Medium stars with soft glow halo
+  // Medium stars with glow halo
   for (let i = 0; i < 35; i++) {
     stars.push({
       x: Math.random(), y: Math.random(),
@@ -64,9 +73,29 @@ function createStars(): Star[] {
   return stars;
 }
 
+function createMotes(count: number): Mote[] {
+  const motes: Mote[] = [];
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 0.05 + Math.random() * 0.15;
+    motes.push({
+      x: Math.random(),
+      y: Math.random(),
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      size: 1 + Math.random() * 2,
+      opacity: 0.15 + Math.random() * 0.4,
+      phase: Math.random() * Math.PI * 2,
+      isGold: Math.random() > 0.3,
+    });
+  }
+  return motes;
+}
+
 export default function StarField() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const starsRef = useRef<Star[]>(createStars());
+  const motesRef = useRef<Mote[]>(createMotes(40));
   const rafRef = useRef<number>(0);
 
   useEffect(() => {
@@ -90,6 +119,7 @@ export default function StarField() {
     window.addEventListener("resize", resize);
 
     const stars = starsRef.current;
+    const motes = motesRef.current;
 
     const draw = (time: number) => {
       const t = time * 0.001;
@@ -97,6 +127,7 @@ export default function StarField() {
       const h = canvas.height / dpr;
       ctx.clearRect(0, 0, w, h);
 
+      // ── Stars ──
       for (const s of stars) {
         const twinkle = Math.sin(t * s.speed * 2 + s.phase) * 0.35 + 0.65;
         const alpha = twinkle;
@@ -134,6 +165,46 @@ export default function StarField() {
         ctx.fill();
       }
 
+      // ── Floating motes (light particles drifting) ──
+      ctx.globalCompositeOperation = "lighter";
+
+      for (const m of motes) {
+        // Drift
+        m.x += m.vx / w;
+        m.y += m.vy / h;
+
+        // Wrap around
+        if (m.x < -0.02) m.x = 1.02;
+        if (m.x > 1.02) m.x = -0.02;
+        if (m.y < -0.02) m.y = 1.02;
+        if (m.y > 1.02) m.y = -0.02;
+
+        const mx = m.x * w;
+        const my = m.y * h;
+        const breathe = Math.sin(t * 0.5 + m.phase) * 0.3 + 0.7;
+        const alpha = m.opacity * breathe;
+
+        const r = m.isGold ? 255 : 200;
+        const g = m.isGold ? 220 : 170;
+        const b = m.isGold ? 150 : 255;
+
+        // Soft glow
+        const glowR = m.size * 5;
+        const glow = ctx.createRadialGradient(mx, my, 0, mx, my, glowR);
+        glow.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${alpha * 0.25})`);
+        glow.addColorStop(1, "transparent");
+        ctx.fillStyle = glow;
+        ctx.fillRect(mx - glowR, my - glowR, glowR * 2, glowR * 2);
+
+        // Dot
+        ctx.beginPath();
+        ctx.arc(mx, my, m.size * 0.4, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha * 0.7})`;
+        ctx.fill();
+      }
+
+      ctx.globalCompositeOperation = "source-over";
+
       rafRef.current = requestAnimationFrame(draw);
     };
 
@@ -153,7 +224,7 @@ export default function StarField() {
         inset: 0,
         zIndex: 0,
         pointerEvents: "none",
-        background: "#000000",
+        background: "#08061a",
       }}
     />
   );

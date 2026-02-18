@@ -476,7 +476,7 @@ function SimulationCanvas() {
   }
 
   return (
-    <div className="w-screen h-screen" style={{ background: "#000" }}>
+    <div className="w-screen h-screen" style={{ background: "#08061a" }}>
       <StarField />
       <ReactFlow
         nodes={nodes}
