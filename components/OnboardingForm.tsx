@@ -2,13 +2,13 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { UserProfile } from "@/lib/types";
+import { UserProfile, SimulationMode } from "@/lib/types";
 import { playTypeTick, playSwoosh } from "@/lib/sounds";
 
 interface OnboardingStep {
   question: string;
   field: keyof UserProfile;
-  type: "text" | "number" | "gender";
+  type: "text" | "number" | "gender" | "mode";
   placeholder?: string;
 }
 
@@ -49,10 +49,15 @@ const STEPS: OnboardingStep[] = [
     placeholder: "자유롭게 적어",
   },
   {
-    question: "마지막. 네 미래에서 제일 궁금한 게 뭐야?",
+    question: "네 미래에서 제일 궁금한 게 뭐야?",
     field: "question",
     type: "text",
     placeholder: "미래에 대한 궁금함",
+  },
+  {
+    question: "너의 미래를 어떤 눈으로 볼까?",
+    field: "mode",
+    type: "mode",
   },
 ];
 
@@ -60,6 +65,12 @@ const GENDERS = [
   { value: "남", label: "남자" },
   { value: "여", label: "여자" },
   { value: "말하고 싶지 않음", label: "말하고 싶지 않음" },
+];
+
+const MODES: { value: SimulationMode; label: string; desc: string }[] = [
+  { value: "희망적 우주", label: "희망적 우주", desc: "좋은 일이 기다리는 미래" },
+  { value: "현실적 우주", label: "현실적 우주", desc: "있는 그대로의 미래" },
+  { value: "최악의 우주", label: "최악의 우주", desc: "가장 험난한 미래" },
 ];
 
 export default function OnboardingForm() {
@@ -73,6 +84,7 @@ export default function OnboardingForm() {
     age: 0,
     interest: "",
     question: "",
+    mode: "현실적 우주",
   });
   const [phase, setPhase] = useState<"input" | "reacting" | "transitioning" | "loading">("input");
   const [aiReaction, setAiReaction] = useState("");
@@ -102,7 +114,7 @@ export default function OnboardingForm() {
   const canProceed = () => {
     const val = form[currentStep.field];
     if (currentStep.type === "number") return typeof val === "number" && val > 0;
-    if (currentStep.type === "gender") return typeof val === "string" && val.length > 0;
+    if (currentStep.type === "gender" || currentStep.type === "mode") return typeof val === "string" && val.length > 0;
     return typeof val === "string" && val.trim().length > 0;
   };
 
@@ -439,8 +451,52 @@ export default function OnboardingForm() {
           </div>
         )}
 
+        {/* Mode select — 3 buttons */}
+        {phase === "input" && currentStep.type === "mode" && (
+          <div className="space-y-3 max-w-sm mx-auto">
+            {MODES.map((m) => (
+              <button
+                key={m.value}
+                onClick={() => {
+                  setForm({ ...form, mode: m.value });
+                  // Save and go to simulation (last step, no AI reaction)
+                  setTimeout(() => {
+                    setPhase("loading");
+                    sessionStorage.setItem(
+                      "parallelme-profile",
+                      JSON.stringify({ ...form, mode: m.value })
+                    );
+                    setTimeout(() => router.push("/simulation"), 2500);
+                  }, 100);
+                }}
+                className="w-full flex flex-col items-center gap-1 px-5 py-4 rounded-xl transition-all duration-300"
+                style={{
+                  background: "rgba(0, 0, 0, 0.4)",
+                  border: form.mode === m.value
+                    ? "1px solid rgba(212, 168, 83, 0.5)"
+                    : "1px solid rgba(255, 255, 255, 0.08)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "rgba(212, 168, 83, 0.4)";
+                  e.currentTarget.style.background = "rgba(212, 168, 83, 0.05)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor =
+                    form.mode === m.value
+                      ? "rgba(212, 168, 83, 0.5)"
+                      : "rgba(255, 255, 255, 0.08)";
+                  e.currentTarget.style.background = "rgba(0, 0, 0, 0.4)";
+                }}
+              >
+                <span style={{ color: "rgba(255,255,255,0.85)" }}>{m.label}</span>
+                <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.35)" }}>{m.desc}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Submit hint */}
-        {phase === "input" && currentStep.type !== "gender" && (
+        {phase === "input" && currentStep.type !== "gender" && currentStep.type !== "mode" && (
           <div className="flex justify-center mt-6">
             <button
               onClick={submitStep}

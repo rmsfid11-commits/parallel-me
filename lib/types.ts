@@ -1,4 +1,7 @@
-// ── 새 UserProfile (7 필드) ──
+// ── 시뮬레이션 모드 ──
+export type SimulationMode = "희망적 우주" | "현실적 우주" | "최악의 우주";
+
+// ── 새 UserProfile (8 필드) ──
 export interface UserProfile {
   birthday: string;      // "1992.04.27"
   birthTime: string;     // "15:00" 또는 "모름"
@@ -7,6 +10,20 @@ export interface UserProfile {
   age: number;
   interest: string;      // 관심사
   question: string;      // 미래에서 궁금한 것
+  mode: SimulationMode;
+}
+
+// ── 스토리 시나리오 (자동 진행 모드) ──
+export interface StoryScenario {
+  id: string;
+  timeLabel: string;
+  content: string;
+  autoChoice?: string;      // AI's auto-choice (internal)
+  isBranch: boolean;
+  branchMessage?: string;
+  interventionText?: string; // user's intervention text
+  parentId: string | null;
+  timelineId: string;
 }
 
 // ── 채팅 메시지 ──
@@ -16,6 +33,8 @@ export interface ChatMessage {
   content: string;
   branchPoint?: BranchPointData;
   timestamp: number;
+  timeLabel?: string;         // 스토리 모드 시간 태그
+  isIntervention?: boolean;   // 사용자 개입 텍스트
 }
 
 // ── 분기점 데이터 ──

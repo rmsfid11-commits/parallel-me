@@ -23,6 +23,7 @@ interface MapPanelProps {
   onFitView: () => void;
   onAnalyze: () => void;
   onClose: () => void;
+  isOverlay?: boolean;
 }
 
 export default function MapPanel({
@@ -33,30 +34,82 @@ export default function MapPanel({
   onFitView,
   onAnalyze,
   onClose,
+  isOverlay = false,
 }: MapPanelProps) {
-  return (
-    <div className="fixed inset-0 z-40 flex flex-col" style={{ background: "#000" }}>
-      <StarField />
+  const containerClass = isOverlay
+    ? "fixed inset-0 z-40 flex flex-col"
+    : "w-full h-full flex flex-col relative";
 
-      {/* Top bar */}
-      <div
-        className="flex-none flex items-center justify-between px-4 py-2.5 z-10"
-        style={{
-          background: "rgba(0,0,0,0.9)",
-          borderBottom: "1px solid rgba(212,168,83,0.1)",
-          paddingTop: "max(8px, env(safe-area-inset-top))",
-        }}
-      >
-        <h2
-          className="text-sm tracking-wide"
+  return (
+    <div className={containerClass} style={{ background: "#000" }}>
+      {isOverlay && <StarField />}
+
+      {/* Top bar (only for overlay mode) */}
+      {isOverlay && (
+        <div
+          className="flex-none flex items-center justify-between px-4 py-2.5 z-10"
           style={{
-            color: "rgba(212,168,83,0.8)",
-            fontFamily: "var(--font-display), serif",
+            background: "rgba(0,0,0,0.9)",
+            borderBottom: "1px solid rgba(212,168,83,0.1)",
+            paddingTop: "max(8px, env(safe-area-inset-top))",
           }}
         >
-          나의 우주
-        </h2>
-        <div className="flex gap-2">
+          <h2
+            className="text-sm tracking-wide"
+            style={{
+              color: "rgba(212,168,83,0.8)",
+              fontFamily: "var(--font-display), serif",
+            }}
+          >
+            나의 우주
+          </h2>
+          <div className="flex gap-2">
+            <button
+              onClick={onFitView}
+              className="px-2.5 py-1 rounded-lg text-[11px] transition-all duration-300"
+              style={{
+                background: "rgba(0,0,0,0.7)",
+                border: "1px solid rgba(212,168,83,0.3)",
+                color: "rgba(212,168,83,0.8)",
+              }}
+            >
+              전체 보기
+            </button>
+            <button
+              onClick={onAnalyze}
+              className="px-2.5 py-1 rounded-lg text-[11px] transition-all duration-300"
+              style={{
+                background: "rgba(0,0,0,0.7)",
+                border: "1px solid rgba(179,136,255,0.3)",
+                color: "rgba(179,136,255,0.8)",
+              }}
+            >
+              우주 분석
+            </button>
+            <button
+              onClick={onClose}
+              className="px-2.5 py-1 rounded-lg text-[11px] transition-all duration-300"
+              style={{
+                background: "rgba(212,168,83,0.1)",
+                border: "1px solid rgba(212,168,83,0.3)",
+                color: "rgba(212,168,83,0.9)",
+              }}
+            >
+              돌아가기
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Inline controls (tab mode) */}
+      {!isOverlay && (
+        <div
+          className="flex-none flex items-center justify-end gap-2 px-3 py-2 z-10"
+          style={{
+            background: "rgba(0,0,0,0.5)",
+            borderBottom: "1px solid rgba(212,168,83,0.08)",
+          }}
+        >
           <button
             onClick={onFitView}
             className="px-2.5 py-1 rounded-lg text-[11px] transition-all duration-300"
@@ -79,19 +132,8 @@ export default function MapPanel({
           >
             우주 분석
           </button>
-          <button
-            onClick={onClose}
-            className="px-2.5 py-1 rounded-lg text-[11px] transition-all duration-300"
-            style={{
-              background: "rgba(212,168,83,0.1)",
-              border: "1px solid rgba(212,168,83,0.3)",
-              color: "rgba(212,168,83,0.9)",
-            }}
-          >
-            채팅으로 돌아가기
-          </button>
         </div>
-      </div>
+      )}
 
       {/* ReactFlow */}
       <div className="flex-1 relative">
