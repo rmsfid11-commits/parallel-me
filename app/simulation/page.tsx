@@ -182,11 +182,7 @@ function SimulationCanvas() {
   const storyScenariosRef = useRef<StoryScenario[]>([]);
   storyScenariosRef.current = storyScenarios;
 
-  // Story mode controls
-  const [isPaused, setIsPaused] = useState(false);
-  const isPausedRef = useRef(false);
-  isPausedRef.current = isPaused;
-  const autoProgressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Story mode controls (tap-to-advance, no auto-progress)
 
   // Intervention UI
   const [isIntervening, setIsIntervening] = useState(false);
@@ -441,35 +437,24 @@ function SimulationCanvas() {
     [profile, getStoryScenariosFromMessages, updateTimelineMessages]
   );
 
-  // ── Story: auto-progress loop (2 seconds) ──
+  // ── Story: first scenario auto-start only ──
   useEffect(() => {
-    if (!profile || isPaused || isGenerating) return;
+    if (!profile || isGenerating) return;
 
     const msgs = getActiveMessages();
     if (msgs.length === 0) {
-      // Start first scenario
       generateStoryScenario();
-      return;
     }
-
-    // Schedule next scenario after 2 seconds
-    autoProgressRef.current = setTimeout(() => {
-      if (
-        !isPausedRef.current &&
-        !isGeneratingRef.current
-      ) {
-        generateStoryScenario();
-      }
-    }, 2000);
-
-    return () => {
-      if (autoProgressRef.current) {
-        clearTimeout(autoProgressRef.current);
-        autoProgressRef.current = null;
-      }
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile, isPaused, isGenerating, timelines]);
+  }, [profile]);
+
+  // ── Story: tap to advance ──
+  const handleTapAdvance = useCallback(() => {
+    if (isGeneratingRef.current || !profile) return;
+    // Don't advance if intervening
+    if (isIntervening) return;
+    generateStoryScenario();
+  }, [profile, isIntervening, generateStoryScenario]);
 
   // ── Story: handle intervention ──
   const handleIntervene = useCallback(
@@ -491,8 +476,7 @@ function SimulationCanvas() {
       // Generate scenario with intervention
       generateStoryScenario(text);
 
-      // Resume after intervention
-      setIsPaused(false);
+      // Close intervention UI
       setIsIntervening(false);
       setInterventionText("");
     },
@@ -1144,11 +1128,12 @@ function SimulationCanvas() {
             />
           </div>
 
-          {/* Scroll reading area */}
+          {/* Scroll reading area — tap to advance */}
           <div className="flex-1 overflow-hidden z-10 relative">
             <StoryPanel
               messages={activeMessages}
               isGenerating={isGenerating}
+              onTapAdvance={handleTapAdvance}
             />
           </div>
 
@@ -1224,26 +1209,10 @@ function SimulationCanvas() {
 
             {/* Action buttons */}
             <div className="flex items-center justify-center gap-3 px-4 py-3">
-              {!isPaused && !isIntervening && (
-                <button
-                  onClick={() => setIsPaused(true)}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] transition-all"
-                  style={{
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    color: "rgba(255,255,255,0.5)",
-                  }}
-                >
-                  <span style={{ fontSize: "14px" }}>&#x23F8;&#xFE0E;</span>
-                  멈추기
-                </button>
-              )}
-
               {!isIntervening && (
                 <button
                   onClick={() => {
                     setIsIntervening(true);
-                    setIsPaused(true);
                   }}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] transition-all"
                   style={{
@@ -1254,21 +1223,6 @@ function SimulationCanvas() {
                 >
                   <span style={{ fontSize: "14px" }}>&#x270D;&#xFE0E;</span>
                   개입하기
-                </button>
-              )}
-
-              {isPaused && !isIntervening && (
-                <button
-                  onClick={() => setIsPaused(false)}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] transition-all"
-                  style={{
-                    background: "rgba(212,168,83,0.1)",
-                    border: "1px solid rgba(212,168,83,0.3)",
-                    color: "rgba(212,168,83,0.9)",
-                  }}
-                >
-                  <span style={{ fontSize: "14px" }}>&#x25B6;&#xFE0E;</span>
-                  계속
                 </button>
               )}
 

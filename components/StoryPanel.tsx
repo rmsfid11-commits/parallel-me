@@ -6,11 +6,13 @@ import { ChatMessage } from "@/lib/types";
 interface StoryPanelProps {
   messages: ChatMessage[];
   isGenerating: boolean;
+  onTapAdvance?: () => void;
 }
 
 export default function StoryPanel({
   messages,
   isGenerating,
+  onTapAdvance,
 }: StoryPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -33,9 +35,13 @@ export default function StoryPanel({
     <div
       ref={scrollRef}
       className="h-full overflow-y-auto"
+      onClick={() => {
+        if (!isGenerating && onTapAdvance) onTapAdvance();
+      }}
       style={{
         scrollbarWidth: "thin",
         scrollbarColor: "rgba(212,168,83,0.2) transparent",
+        cursor: isGenerating ? "default" : "pointer",
       }}
     >
       <div className="max-w-2xl mx-auto px-5 md:px-8 py-8 pb-4">
@@ -171,6 +177,18 @@ export default function StoryPanel({
                 }}
               />
             ))}
+          </div>
+        )}
+
+        {/* Tap to continue hint */}
+        {!isGenerating && storyMessages.length > 0 && (
+          <div className="flex justify-center mt-10 mb-4 animate-fadeIn">
+            <span
+              className="text-[11px] animate-pulse"
+              style={{ color: "rgba(255,255,255,0.15)" }}
+            >
+              화면을 터치하면 계속됩니다
+            </span>
           </div>
         )}
       </div>

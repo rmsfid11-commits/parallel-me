@@ -282,7 +282,7 @@ export default function OnboardingForm() {
       setAiReaction(reaction);
 
       startTypewriter(reaction, () => {
-        autoAdvanceRef.current = setTimeout(advanceStep, 1500);
+        // Don't auto-advance — user taps to proceed
       });
     } catch {
       advanceStep();
@@ -290,14 +290,17 @@ export default function OnboardingForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form, currentStep, phase, step, startTypewriter, advanceStep]);
 
-  // Skip waiting
+  // Tap to skip / advance from reaction
   const skipToNext = useCallback(() => {
     if (phase === "reacting") {
+      // If still typing, finish instantly
       if (typewriterRef.current) {
         clearInterval(typewriterRef.current);
         typewriterRef.current = null;
         setDisplayedReaction(aiReaction);
+        return; // First tap: show full text. Second tap: advance.
       }
+      // Typing is done — advance to next step
       if (autoAdvanceRef.current) {
         clearTimeout(autoAdvanceRef.current);
         autoAdvanceRef.current = null;
@@ -691,14 +694,14 @@ export default function OnboardingForm() {
           </div>
         )}
 
-        {/* Tap to skip hint */}
+        {/* Tap to continue hint */}
         {phase === "reacting" && displayedReaction === aiReaction && (
-          <div className="flex justify-center mt-4 animate-fadeIn">
+          <div className="flex justify-center mt-6 animate-fadeIn">
             <span
-              className="text-[11px]"
-              style={{ color: "rgba(255,255,255,0.12)" }}
+              className="text-[11px] animate-pulse"
+              style={{ color: "rgba(255,255,255,0.2)" }}
             >
-              탭하면 넘어갑니다
+              터치하면 다음으로
             </span>
           </div>
         )}
