@@ -4,12 +4,11 @@ export type SimulationMode = "희망적 우주" | "현실적 우주" | "최악�
 // ── UserProfile (온보딩 수집) ──
 export interface UserProfile {
   birthday: string;           // "1992.04.27"
-  birthTime: string;          // "15:00" 또는 "모름"
+  birthTime: string;          // "16:34" 또는 "모름"
   job: string;                // 직업
   careerYears: string;        // 경력/연차 "15년", "3년차"
-  age: number;
-  monthlyIncome: string;      // 월수입 "350만원"
-  interest: string;           // 관심사/하고 싶은 것
+  monthlyIncome: string;      // 월수입 "600만원"
+  debt: string;               // 빚 "1800만원" 또는 "없음"
   pastExperience: string;     // 과거 사업/부업 경험
   question: string;           // 미래에서 궁금한 것
   mode: SimulationMode;

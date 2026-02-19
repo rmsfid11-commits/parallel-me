@@ -9,14 +9,12 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 const ONBOARDING_LENSES: Record<number, string> = {
   0: "사주팔자/만세력 기반으로 성향을 한 마디로 읽어줘. 생년월일의 천간지지를 해석해서 핵심 기질을 꿰뚫어.",
-  1: "태어난 시간을 결합해 사주 시주를 심화해. 모르면 마야달력의 킨 번호와 태양 문장으로 대체 해석. '그래도 괜찮아'로 시작.",
+  1: "태어난 시간을 결합해 수비학(생명수)과 시주를 심화해. 모르면 마야달력의 킨 번호와 태양 문장으로 대체 해석. '그래도 괜찮아'로 시작.",
   2: "직업/현재 상태에서 에니어그램 유형을 읽어줘. '에니어그램으로 보면 너는~' 느낌.",
-  3: "경력 연차 정보로 이 사람의 커리어 궤적을 한 마디로 읽어줘. 바이오리듬이나 생애주기 느낌.",
-  4: "나이와 수비학(생명수, 운명수)으로 지금 인생 어디쯤인지 한 마디. '수비학으로 보면~' 느낌.",
-  5: "월수입 정보를 담담하게 받아들이고, 별자리나 띠 성향과 결합해서 재정 패턴을 한 마디로.",
-  6: "관심사에서 타로 한 장을 뽑아주는 느낌으로 이 사람의 진짜 욕구를 꿰뚫어. '지금 너한테 뜨는 카드는~'",
-  7: "과거 경험(사업/부업)을 바탕으로 휴먼디자인 에너지 타입 느낌으로 도전 성향을 읽어줘.",
-  8: "지금까지 알게 된 정보 전체를 종합해서 이 사람의 핵심을 꿰뚫는 한 마디. 마야달력이나 사주 종합.",
+  3: "경력 연차 정보로 이 사람의 커리어 궤적을 한 마디로 읽어줘. 바이오리듬이나 생애주기 느낌. '15년이면 눈 감고도 하겠네. 근데 그게 오히려 문제지.' 같은 톤.",
+  4: "월수입 정보를 담담하게 받아들이고, 별자리나 띠 성향과 결합해서 재정 패턴을 한 마디로.",
+  5: "빚/부채 정보를 담담하게 받아들여. 금액이 크든 작든 판단하지 않고, 재무 상황의 맥락을 읽어줘.",
+  6: "과거 경험(사업/부업)을 바탕으로 마야달력 킨 번호와 결합해 도전 성향을 읽어줘. '역시. 네 킨 번호가 만드는 사람이야.' 같은 톤.",
 };
 
 export async function generateOnboardingReaction(
@@ -24,13 +22,13 @@ export async function generateOnboardingReaction(
   userInput: string,
   collectedProfile: Partial<UserProfile>
 ): Promise<string> {
-  // Step 8 (question) 이후: 고정 반응
-  if (step === 8) {
+  // Step 7 (question) 이후: 고정 반응
+  if (step === 7) {
     return "좋아. 너의 우주를 계산하고 있어.";
   }
 
-  // Step 9 (mode): 클라이언트에서 처리
-  if (step >= 9) return "";
+  // Step 8 (mode): 클라이언트에서 처리
+  if (step >= 8) return "";
 
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash-lite",
@@ -103,10 +101,9 @@ ${astrologyText}
 
 # 사용자 정보 (온보딩에서 수집)
 - 직업: ${profile.job}
-- 나이: ${profile.age}세
 - 경력/연차: ${profile.careerYears}
 - 월수입: ${profile.monthlyIncome}
-- 관심사/하고 싶은 것: ${profile.interest}
+- 빚/부채: ${profile.debt}
 - 과거 경험: ${profile.pastExperience}
 - 가장 궁금한 것: ${profile.question}
 - 모드: ${profile.mode}
@@ -330,8 +327,8 @@ export async function generateUniverseReport(
 3-5문단으로. 구체적 숫자와 사실 기반으로.`;
 
   const userMessage = `사용자 프로필:
-- 직업: ${profile.job}, 나이: ${profile.age}세, 월수입: ${profile.monthlyIncome}
-- 관심사: ${profile.interest}
+- 직업: ${profile.job}, 경력: ${profile.careerYears}, 월수입: ${profile.monthlyIncome}
+- 빚/부채: ${profile.debt}
 - 궁금한 것: ${profile.question}
 
 분기점들:

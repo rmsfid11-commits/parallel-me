@@ -8,7 +8,7 @@ import { playTypeTick, playSwoosh } from "@/lib/sounds";
 interface OnboardingStep {
   question: string;
   field: keyof UserProfile;
-  type: "text" | "number" | "mode";
+  type: "text" | "mode";
   placeholder?: string;
 }
 
@@ -20,10 +20,10 @@ const STEPS: OnboardingStep[] = [
     placeholder: "예: 1992.04.27",
   },
   {
-    question: "태어난 시간 알아? 몰라도 괜찮아",
+    question: "태어난 시간 알아? 몰라도 괜찮아~",
     field: "birthTime",
     type: "text",
-    placeholder: "예: 15:00 또는 모름",
+    placeholder: "예: 16:34 또는 모름",
   },
   {
     question: "지금 뭐 하고 있어?",
@@ -38,22 +38,16 @@ const STEPS: OnboardingStep[] = [
     placeholder: "예: 3년, 신입, 15년차",
   },
   {
-    question: "몇 살이야?",
-    field: "age",
-    type: "number",
-    placeholder: "나이",
-  },
-  {
-    question: "한 달에 얼마 정도 벌어?",
+    question: "월급은 어느 정도야?",
     field: "monthlyIncome",
     type: "text",
-    placeholder: "예: 350만원, 200만원",
+    placeholder: "예: 600만원, 200만원",
   },
   {
-    question: "요즘 가장 하고 싶은 건 뭐야?",
-    field: "interest",
+    question: "혹시 빚 같은 거 있어?",
+    field: "debt",
     type: "text",
-    placeholder: "관심사, 하고 싶은 것",
+    placeholder: "예: 1800만원, 없음",
   },
   {
     question: "예전에 사업이나 부업 해본 적 있어?",
@@ -88,9 +82,8 @@ export default function OnboardingForm() {
     birthTime: "",
     job: "",
     careerYears: "",
-    age: 0,
     monthlyIncome: "",
-    interest: "",
+    debt: "",
     pastExperience: "",
     question: "",
     mode: "현실적 우주",
@@ -124,8 +117,6 @@ export default function OnboardingForm() {
 
   const canProceed = () => {
     const val = form[currentStep.field];
-    if (currentStep.type === "number")
-      return typeof val === "number" && val > 0;
     if (currentStep.type === "mode")
       return typeof val === "string" && val.length > 0;
     return typeof val === "string" && val.trim().length > 0;
@@ -367,47 +358,6 @@ export default function OnboardingForm() {
               placeholder={currentStep.placeholder}
               autoFocus
               className="w-full max-w-sm text-center text-xl bg-transparent border-b-2 pb-2 outline-none transition-all duration-300 placeholder:text-white/20"
-              style={{
-                color: "rgba(255, 255, 255, 0.9)",
-                borderColor: "rgba(212, 168, 83, 0.3)",
-                caretColor: "#d4a853",
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor =
-                  "rgba(212, 168, 83, 0.6)";
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor =
-                  "rgba(212, 168, 83, 0.3)";
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  submitStep();
-                }
-              }}
-            />
-          </div>
-        )}
-
-        {/* Number input */}
-        {phase === "input" && currentStep.type === "number" && (
-          <div className="flex justify-center">
-            <input
-              ref={inputRef as React.RefObject<HTMLInputElement>}
-              type="number"
-              value={form.age || ""}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  age: parseInt(e.target.value) || 0,
-                })
-              }
-              placeholder={currentStep.placeholder}
-              min={10}
-              max={100}
-              autoFocus
-              className="w-24 text-center text-3xl bg-transparent border-b-2 pb-2 outline-none transition-all duration-300 placeholder:text-white/20"
               style={{
                 color: "rgba(255, 255, 255, 0.9)",
                 borderColor: "rgba(212, 168, 83, 0.3)",
