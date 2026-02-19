@@ -122,6 +122,7 @@ export default function ChatPanel({
           borderTop: "1px solid rgba(212, 168, 83, 0.1)",
           background: "rgba(0, 0, 0, 0.5)",
           backdropFilter: "blur(12px)",
+          paddingBottom: "max(12px, env(safe-area-inset-bottom))",
         }}
       >
         <div
@@ -136,7 +137,7 @@ export default function ChatPanel({
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder="무슨 생각이야?"
+            placeholder="계속 / 개입 / 질문..."
             rows={1}
             className="flex-1 bg-transparent outline-none resize-none text-[14px] md:text-[15px] placeholder:text-white/20"
             style={{

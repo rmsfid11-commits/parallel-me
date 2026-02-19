@@ -16,16 +16,13 @@ import {
   UserProfile,
   ChatMessage,
   Timeline,
-  StoryScenario,
 } from "@/lib/types";
 import { type ScenarioNodeData } from "@/components/ScenarioNode";
 import MapPanel from "@/components/MapPanel";
 import MiniMap from "@/components/MiniMap";
-import StoryPanel from "@/components/StoryPanel";
+import ChatPanel from "@/components/ChatPanel";
 import StarField from "@/components/StarField";
 import ForkEffect from "@/components/ForkEffect";
-import ZoomSimulation from "@/components/ZoomSimulation";
-import { type ParallelNodeData } from "@/components/ParallelNode";
 import { getLayoutedElements } from "@/lib/layout";
 import {
   startAmbient,
@@ -36,7 +33,7 @@ import {
   setMuted,
 } from "@/lib/sounds";
 
-// ── 되돌리기 확인 모달 ──
+// ── Rewind modal ──
 function RewindModal({
   isOpen,
   onConfirm,
@@ -95,7 +92,7 @@ function RewindModal({
   );
 }
 
-// ── 우주 요약 리포트 모달 ──
+// ── Report modal ──
 function ReportModal({
   isOpen,
   report,
@@ -160,7 +157,7 @@ function ReportModal({
 }
 
 // ══════════════════════════════════════════
-// ── 메인 시뮬레이션
+// ── Main Simulation (Chat Mode)
 // ══════════════════════════════════════════
 function SimulationCanvas() {
   const router = useRouter();
@@ -169,7 +166,7 @@ function SimulationCanvas() {
   // Profile
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
-  // Timelines (shared data for story + map)
+  // Timelines
   const [timelines, setTimelines] = useState<Timeline[]>([]);
   const [activeTimelineId, setActiveTimelineId] = useState<string>("");
   const timelinesRef = useRef<Timeline[]>([]);
@@ -177,41 +174,16 @@ function SimulationCanvas() {
   timelinesRef.current = timelines;
   activeTimelineIdRef.current = activeTimelineId;
 
-  // Story scenarios (story mode data)
-  const [storyScenarios, setStoryScenarios] = useState<StoryScenario[]>([]);
-  const storyScenariosRef = useRef<StoryScenario[]>([]);
-  storyScenariosRef.current = storyScenarios;
-
-  // Story mode controls (tap-to-advance, no auto-progress)
-
-  // Intervention UI
-  const [isIntervening, setIsIntervening] = useState(false);
-  const [interventionText, setInterventionText] = useState("");
-  const interventionInputRef = useRef<HTMLTextAreaElement>(null);
-
-  // UI
+  // UI state
   const [isGenerating, setIsGenerating] = useState(false);
   const [showFullMap, setShowFullMap] = useState(false);
   const [soundMuted, setSoundMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // View mode: scroll (default) or zoom
-  const [viewMode, setViewMode] = useState<"scroll" | "zoom">(() => {
-    if (typeof window !== "undefined") {
-      return (localStorage.getItem("parallelme-viewmode") as "scroll" | "zoom") || "scroll";
-    }
-    return "scroll";
-  });
-
-  // Fork effect
   const [showForkEffect, setShowForkEffect] = useState(false);
 
-  // Zoom mode nodes/edges (TB layout)
-  const [zoomNodes, setZoomNodes] = useState<Node[]>([]);
-  const [zoomEdges, setZoomEdges] = useState<Edge[]>([]);
-
-  // First branch tracking
-  const isFirstBranchRef = useRef(true);
+  const isGeneratingRef = useRef(false);
+  isGeneratingRef.current = isGenerating;
+  const hasStartedRef = useRef(false);
 
   // Map (ReactFlow)
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -236,9 +208,6 @@ function SimulationCanvas() {
   const [reportText, setReportText] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
 
-  const isGeneratingRef = useRef(false);
-  isGeneratingRef.current = isGenerating;
-
   // ── Audio init ──
   useEffect(() => {
     const initAudio = () => {
@@ -255,7 +224,7 @@ function SimulationCanvas() {
     };
   }, []);
 
-  // ── Load profile from localStorage ──
+  // ── Load profile ──
   useEffect(() => {
     const stored = localStorage.getItem("parallelme-profile");
     if (!stored) {
@@ -266,7 +235,7 @@ function SimulationCanvas() {
       const p = JSON.parse(stored) as UserProfile;
       setProfile(p);
 
-      // Try restore simulation data from localStorage
+      // Restore from localStorage
       const savedSim = localStorage.getItem("parallelme-simulation");
       if (savedSim) {
         try {
@@ -295,7 +264,7 @@ function SimulationCanvas() {
     }
   }, [router]);
 
-  // ── Persist simulation data to localStorage ──
+  // ── Persist simulation ──
   useEffect(() => {
     if (timelines.length > 0 && activeTimelineId) {
       localStorage.setItem(
@@ -305,12 +274,7 @@ function SimulationCanvas() {
     }
   }, [timelines, activeTimelineId]);
 
-  // ── Persist viewMode ──
-  useEffect(() => {
-    localStorage.setItem("parallelme-viewmode", viewMode);
-  }, [viewMode]);
-
-  // ── Swipe / beforeunload protection ──
+  // ── beforeunload protection ──
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       const msgs = timelinesRef.current.flatMap((t) => t.messages);
@@ -321,13 +285,6 @@ function SimulationCanvas() {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
-
-  // ── Focus intervention input ──
-  useEffect(() => {
-    if (isIntervening && interventionInputRef.current) {
-      interventionInputRef.current.focus();
-    }
-  }, [isIntervening]);
 
   // ── Helpers ──
   const getActiveMessages = useCallback((): ChatMessage[] => {
@@ -352,74 +309,181 @@ function SimulationCanvas() {
     []
   );
 
-  // ── Story: convert messages to story scenarios for API ──
-  const getStoryScenariosFromMessages = useCallback((): StoryScenario[] => {
-    const msgs = getActiveMessages();
-    return msgs
-      .filter((m) => m.role === "assistant" && m.timeLabel)
-      .map((m) => ({
-        id: m.id,
-        timeLabel: m.timeLabel || "",
-        content: m.content,
-        autoChoice: undefined,
-        isBranch: false,
-        parentId: null,
-        timelineId: activeTimelineIdRef.current,
-      }));
-  }, [getActiveMessages]);
+  // ── Call /api/chat ──
+  const callChatAPI = useCallback(
+    async (msgs: ChatMessage[], chosenLabel?: string) => {
+      if (!profile) return null;
 
-  // ── Story: generate next scenario ──
-  const generateStoryScenario = useCallback(
-    async (interventionText?: string) => {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profile,
+          messages: msgs,
+          chosenLabel,
+        }),
+      });
+
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "응답 생성 실패");
+      }
+
+      return await res.json() as { text: string; branchPoint?: import("@/lib/types").BranchPointData };
+    },
+    [profile]
+  );
+
+  // ── Handle sending a message ──
+  const handleSendMessage = useCallback(
+    async (text: string) => {
       if (!profile || isGeneratingRef.current) return;
+
+      const tlId = activeTimelineIdRef.current;
+
+      // Add user message
+      const userMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: text,
+        timestamp: Date.now(),
+      };
+      updateTimelineMessages(tlId, (msgs) => [...msgs, userMsg]);
 
       setIsGenerating(true);
       isGeneratingRef.current = true;
 
       try {
-        const scenarios = getStoryScenariosFromMessages();
-        const res = await fetch("/api/scenario", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            profile,
-            previousScenarios: scenarios,
-            intervention: interventionText,
-          }),
-        });
+        const currentMsgs = [
+          ...getActiveMessages(),
+          userMsg,
+        ];
+        const result = await callChatAPI(currentMsgs);
+        if (!result) return;
 
-        if (!res.ok) {
-          const d = await res.json();
-          throw new Error(d.error || "시나리오 생성 실패");
-        }
-
-        const data = await res.json();
-        const tlId = activeTimelineIdRef.current;
-
-        // If this is the first branch, insert a system message
-        if (interventionText && isFirstBranchRef.current) {
-          isFirstBranchRef.current = false;
-          const systemMsg: ChatMessage = {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            content: "방금 다른 우주도 하나 태어났어. 상단 맵에서 볼 수 있어. 네가 선택하지 않은 길도 어딘가에서 흐르고 있어.",
-            timestamp: Date.now(),
-          };
-          updateTimelineMessages(tlId, (msgs) => [...msgs, systemMsg]);
-        }
-
-        // Add scenario as an assistant message with timeLabel
         const aiMsg: ChatMessage = {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: data.content,
+          content: result.text,
           timestamp: Date.now(),
-          timeLabel: data.timeLabel,
+          branchPoint: result.branchPoint,
         };
-
         updateTimelineMessages(tlId, (msgs) => [...msgs, aiMsg]);
 
-        if (data.isBranch || interventionText) {
+        if (result.branchPoint) {
+          playBranchCreate();
+          setShowForkEffect(true);
+          if (navigator.vibrate) navigator.vibrate(50);
+        } else {
+          playNodeCreate();
+        }
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "오류가 발생했습니다."
+        );
+      } finally {
+        setIsGenerating(false);
+        isGeneratingRef.current = false;
+      }
+    },
+    [profile, getActiveMessages, updateTimelineMessages, callChatAPI]
+  );
+
+  // ── Handle branch choice ──
+  const handleBranchChoice = useCallback(
+    async (msgId: string, label: string, index: number) => {
+      if (!profile || isGeneratingRef.current) return;
+
+      const tlId = activeTimelineIdRef.current;
+
+      // Update chosen index on the message
+      updateTimelineMessages(tlId, (msgs) =>
+        msgs.map((m) =>
+          m.id === msgId && m.branchPoint
+            ? { ...m, branchPoint: { ...m.branchPoint, chosenIndex: index } }
+            : m
+        )
+      );
+
+      setIsGenerating(true);
+      isGeneratingRef.current = true;
+
+      try {
+        // Get updated messages (with chosen index set)
+        const updatedMsgs = getActiveMessages().map((m) =>
+          m.id === msgId && m.branchPoint
+            ? { ...m, branchPoint: { ...m.branchPoint, chosenIndex: index } }
+            : m
+        );
+
+        const result = await callChatAPI(updatedMsgs, label);
+        if (!result) return;
+
+        const aiMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: result.text,
+          timestamp: Date.now(),
+          branchPoint: result.branchPoint,
+        };
+        updateTimelineMessages(tlId, (msgs) => [...msgs, aiMsg]);
+
+        playBranchCreate();
+        setShowForkEffect(true);
+        if (navigator.vibrate) navigator.vibrate(50);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "오류가 발생했습니다."
+        );
+      } finally {
+        setIsGenerating(false);
+        isGeneratingRef.current = false;
+      }
+    },
+    [profile, getActiveMessages, updateTimelineMessages, callChatAPI]
+  );
+
+  // ── Auto-start first chat ──
+  useEffect(() => {
+    if (!profile || hasStartedRef.current) return;
+
+    const msgs = getActiveMessages();
+    if (msgs.length > 0) {
+      hasStartedRef.current = true;
+      return;
+    }
+
+    // Wait for timeline to be ready
+    if (timelines.length === 0 || !activeTimelineId) return;
+
+    hasStartedRef.current = true;
+
+    const startChat = async () => {
+      setIsGenerating(true);
+      isGeneratingRef.current = true;
+      try {
+        const tlId = activeTimelineIdRef.current;
+        const startMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: "user",
+          content: "시작해줘",
+          timestamp: Date.now(),
+        };
+        updateTimelineMessages(tlId, (msgs) => [...msgs, startMsg]);
+
+        const result = await callChatAPI([startMsg]);
+        if (!result) return;
+
+        const aiMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: result.text,
+          timestamp: Date.now(),
+          branchPoint: result.branchPoint,
+        };
+        updateTimelineMessages(tlId, (msgs) => [...msgs, aiMsg]);
+
+        if (result.branchPoint) {
           playBranchCreate();
           setShowForkEffect(true);
         } else {
@@ -433,55 +497,11 @@ function SimulationCanvas() {
         setIsGenerating(false);
         isGeneratingRef.current = false;
       }
-    },
-    [profile, getStoryScenariosFromMessages, updateTimelineMessages]
-  );
+    };
 
-  // ── Story: first scenario auto-start only ──
-  useEffect(() => {
-    if (!profile || isGenerating) return;
-
-    const msgs = getActiveMessages();
-    if (msgs.length === 0) {
-      generateStoryScenario();
-    }
+    startChat();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile]);
-
-  // ── Story: tap to advance ──
-  const handleTapAdvance = useCallback(() => {
-    if (isGeneratingRef.current || !profile) return;
-    // Don't advance if intervening
-    if (isIntervening) return;
-    generateStoryScenario();
-  }, [profile, isIntervening, generateStoryScenario]);
-
-  // ── Story: handle intervention ──
-  const handleIntervene = useCallback(
-    (text: string) => {
-      if (!profile) return;
-
-      const tlId = activeTimelineIdRef.current;
-
-      // Add user intervention message
-      const userMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: text,
-        timestamp: Date.now(),
-        isIntervention: true,
-      };
-      updateTimelineMessages(tlId, (msgs) => [...msgs, userMsg]);
-
-      // Generate scenario with intervention
-      generateStoryScenario(text);
-
-      // Close intervention UI
-      setIsIntervening(false);
-      setInterventionText("");
-    },
-    [profile, updateTimelineMessages, generateStoryScenario]
-  );
+  }, [profile, timelines, activeTimelineId]);
 
   // ── Collect branch nodes for minimap ──
   const collectBranchNodes = useCallback(() => {
@@ -509,7 +529,6 @@ function SimulationCanvas() {
           });
           prevId = nodeId;
 
-          // Dim nodes for unchosen chat branches
           if (msg.branchPoint?.chosenIndex !== undefined) {
             msg.branchPoint.choices.forEach((c, i) => {
               if (i !== msg.branchPoint!.chosenIndex) {
@@ -532,7 +551,6 @@ function SimulationCanvas() {
         }
       }
 
-      // Connect child timelines
       if (timeline.parentTimelineId) {
         const parentNodeId = `${timeline.parentTimelineId}-${timeline.branchPointMsgId}`;
         const first = result.find(
@@ -718,140 +736,6 @@ function SimulationCanvas() {
       rebuildGraph(timelines, activeTimelineId);
   }, [timelines, activeTimelineId, rebuildGraph]);
 
-  // ── Build zoom-mode graph (TB layout with ParallelNode) ──
-  const rebuildZoomGraph = useCallback(
-    (currentTimelines: Timeline[], currentActiveId: string) => {
-      const branchNodes: {
-        id: string;
-        timeLabel: string;
-        summary: string;
-        choiceLabel?: string;
-        timelineId: string;
-        msgId: string;
-        parentNodeId?: string;
-        isOnActivePath: boolean;
-        isDimBranch: boolean;
-      }[] = [];
-      const edgeList: { source: string; target: string }[] = [];
-
-      for (const timeline of currentTimelines) {
-        const isActive = timeline.id === currentActiveId;
-        let prevBranchNodeId: string | undefined;
-
-        for (const msg of timeline.messages) {
-          if (msg.role === "assistant" && (msg.branchPoint || msg.timeLabel)) {
-            const nodeId = `z-${timeline.id}-${msg.id}`;
-            const summary = msg.branchPoint?.summary || msg.content.substring(0, 80) + "...";
-            const choiceLabel = msg.branchPoint?.chosenIndex !== undefined
-              ? msg.branchPoint.choices[msg.branchPoint.chosenIndex]?.label
-              : undefined;
-
-            branchNodes.push({
-              id: nodeId, timeLabel: msg.branchPoint?.timeLabel || msg.timeLabel || "",
-              summary, choiceLabel,
-              timelineId: timeline.id, msgId: msg.id,
-              parentNodeId: prevBranchNodeId,
-              isOnActivePath: isActive, isDimBranch: !isActive,
-            });
-
-            if (prevBranchNodeId) edgeList.push({ source: prevBranchNodeId, target: nodeId });
-            prevBranchNodeId = nodeId;
-
-            if (msg.branchPoint?.chosenIndex !== undefined) {
-              msg.branchPoint.choices.forEach((c, i) => {
-                if (i !== msg.branchPoint!.chosenIndex) {
-                  const hasChild = currentTimelines.some(
-                    (ct) => ct.branchPointMsgId === msg.id && ct.choiceIndex === i
-                  );
-                  if (!hasChild) {
-                    const dimId = `z-dim-${timeline.id}-${msg.id}-${i}`;
-                    branchNodes.push({
-                      id: dimId, timeLabel: msg.branchPoint!.timeLabel,
-                      summary: msg.branchPoint!.summary,
-                      choiceLabel: c.label,
-                      timelineId: timeline.id, msgId: msg.id,
-                      parentNodeId: nodeId,
-                      isOnActivePath: false, isDimBranch: true,
-                    });
-                    edgeList.push({ source: nodeId, target: dimId });
-                  }
-                }
-              });
-            }
-          }
-        }
-        if (timeline.parentTimelineId) {
-          const pNodeId = `z-${timeline.parentTimelineId}-${timeline.branchPointMsgId}`;
-          const first = branchNodes.find((bn) => bn.timelineId === timeline.id && !bn.parentNodeId);
-          if (first) edgeList.push({ source: pNodeId, target: first.id });
-        }
-      }
-
-      if (branchNodes.length === 0) {
-        setZoomNodes([]);
-        setZoomEdges([]);
-        return;
-      }
-
-      const flowNodes: Node[] = branchNodes.map((bn) => ({
-        id: bn.id,
-        type: "parallel",
-        position: { x: 0, y: 0 },
-        data: {
-          timeLabel: bn.timeLabel,
-          summary: bn.summary,
-          choiceLabel: bn.choiceLabel,
-          isOnActivePath: bn.isOnActivePath,
-          isDimBranch: bn.isDimBranch,
-          timelineId: bn.timelineId,
-          msgId: bn.msgId,
-          onRewind: () => {
-            if (bn.isDimBranch && bn.choiceLabel) {
-              const ptl = currentTimelines.find((t) => t.id === bn.timelineId);
-              const msg = ptl?.messages.find((m) => m.id === bn.msgId);
-              if (msg?.branchPoint) {
-                const ci = msg.branchPoint.choices.findIndex((c) => c.label === bn.choiceLabel);
-                if (ci >= 0) {
-                  setRewindModal({
-                    open: true, timelineId: bn.timelineId, msgId: bn.msgId,
-                    choiceIndex: ci, choiceLabel: bn.choiceLabel!,
-                  });
-                }
-              }
-            }
-          },
-        } satisfies ParallelNodeData,
-      }));
-
-      const flowEdges: Edge[] = edgeList.map((e) => {
-        const target = branchNodes.find((n) => n.id === e.target);
-        return {
-          id: `ze-${e.source}-${e.target}`,
-          source: e.source, sourceHandle: "source",
-          target: e.target, targetHandle: "target",
-          type: "default",
-          style: {
-            stroke: target?.isOnActivePath ? "rgba(212,168,83,0.6)" : "rgba(212,168,83,0.15)",
-            strokeWidth: target?.isOnActivePath ? 2.5 : 1.5,
-            strokeDasharray: target?.isDimBranch ? "6 4" : undefined,
-          },
-          animated: target?.isOnActivePath || false,
-        };
-      });
-
-      const { nodes: layouted, edges: layoutedEdges } = getLayoutedElements(flowNodes, flowEdges, "TB");
-      setZoomNodes(layouted);
-      setZoomEdges(layoutedEdges);
-    },
-    []
-  );
-
-  // Rebuild zoom graph when timelines change
-  useEffect(() => {
-    if (timelines.length > 0 && viewMode === "zoom")
-      rebuildZoomGraph(timelines, activeTimelineId);
-  }, [timelines, activeTimelineId, viewMode, rebuildZoomGraph]);
-
   // ── Rewind ──
   const handleRewind = useCallback(async () => {
     if (!profile || isGeneratingRef.current) return;
@@ -892,35 +776,15 @@ function SimulationCanvas() {
     setIsGenerating(true);
     isGeneratingRef.current = true;
     try {
-      const scenarios = copied
-        .filter((m) => m.role === "assistant" && m.timeLabel)
-        .map((m) => ({
-          id: m.id,
-          timeLabel: m.timeLabel || "",
-          content: m.content,
-          autoChoice: undefined,
-          isBranch: false,
-          parentId: null,
-          timelineId: newTl.id,
-        }));
+      const result = await callChatAPI(copied, choiceLabel);
+      if (!result) return;
 
-      const res = await fetch("/api/scenario", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          profile,
-          previousScenarios: scenarios,
-          intervention: choiceLabel,
-        }),
-      });
-      if (!res.ok) throw new Error("시나리오 생성 실패");
-      const data = await res.json();
       const aiMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: data.content,
+        content: result.text,
         timestamp: Date.now(),
-        timeLabel: data.timeLabel,
+        branchPoint: result.branchPoint,
       };
       setTimelines((prev) =>
         prev.map((t) =>
@@ -939,7 +803,7 @@ function SimulationCanvas() {
       setIsGenerating(false);
       isGeneratingRef.current = false;
     }
-  }, [profile, rewindModal]);
+  }, [profile, rewindModal, callChatAPI]);
 
   // ── Universe Report ──
   const handleAnalyze = useCallback(async () => {
@@ -973,7 +837,7 @@ function SimulationCanvas() {
     }
     if (summaries.length === 0) {
       setReportText(
-        "아직 분기점이 없어. 개입을 더 해보면 갈림길이 생길 거야."
+        "아직 분기점이 없어. 선택지를 골라보면 갈림길이 생길 거야."
       );
       setReportLoading(false);
       return;
@@ -1014,7 +878,7 @@ function SimulationCanvas() {
       className="w-screen h-screen flex flex-col"
       style={{ background: "#000", touchAction: "pan-y" }}
     >
-      {/* StarField behind everything */}
+      {/* StarField */}
       <div className="fixed inset-0 z-0 pointer-events-none">
         <StarField />
       </div>
@@ -1027,14 +891,13 @@ function SimulationCanvas() {
         }}
       />
 
-      {/* Top bar — glass morphism */}
+      {/* Top bar */}
       <div
         className="flex-none z-10 relative glass-panel"
         style={{
           paddingTop: "max(8px, env(safe-area-inset-top))",
         }}
       >
-        {/* Title + controls row */}
         <div className="flex items-center justify-between px-3 py-2">
           <h1
             className="text-sm text-white/80 tracking-wide"
@@ -1076,23 +939,23 @@ function SimulationCanvas() {
               </div>
             )}
 
-            {/* View mode toggle */}
+            {/* Sound toggle */}
             <button
-              onClick={() => setViewMode(viewMode === "scroll" ? "zoom" : "scroll")}
-              className="px-2 py-1 rounded-lg text-[11px] transition-all duration-300"
+              onClick={() => {
+                const n = !soundMuted;
+                setSoundMuted(n);
+                setMuted(n);
+              }}
+              className="px-2 py-1 rounded-lg text-xs transition-all duration-300"
               style={{
-                background: viewMode === "zoom"
-                  ? "rgba(212,168,83,0.12)"
-                  : "rgba(0,0,0,0.5)",
-                border: viewMode === "zoom"
-                  ? "1px solid rgba(212,168,83,0.3)"
-                  : "1px solid rgba(255,255,255,0.06)",
-                color: viewMode === "zoom"
-                  ? "rgba(212,168,83,0.9)"
-                  : "rgba(255,255,255,0.3)",
+                background: "rgba(0,0,0,0.5)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                color: soundMuted
+                  ? "rgba(255,255,255,0.2)"
+                  : "rgba(212,168,83,0.6)",
               }}
             >
-              {viewMode === "zoom" ? "\u{1F4DC}" : "\u{1F52D}"}
+              {soundMuted ? "\u{1F507}" : "\u{1F50A}"}
             </button>
 
             {/* Home */}
@@ -1111,176 +974,48 @@ function SimulationCanvas() {
         </div>
       </div>
 
-      {/* ═══ Scroll Mode ═══ */}
-      {viewMode === "scroll" && (
-        <>
-          {/* Minimap strip */}
-          <div className="flex-none z-10 relative">
-            <MiniMap
-              branchNodes={branchNodesForMinimap}
-              onTap={() => {
-                setShowFullMap(true);
-                setTimeout(
-                  () => fitView({ duration: 600, padding: 0.3 }),
-                  100
-                );
-              }}
-            />
-          </div>
+      {/* Minimap strip */}
+      <div className="flex-none z-10 relative">
+        <MiniMap
+          branchNodes={branchNodesForMinimap}
+          onTap={() => {
+            setShowFullMap(true);
+            setTimeout(
+              () => fitView({ duration: 600, padding: 0.3 }),
+              100
+            );
+          }}
+        />
+      </div>
 
-          {/* Scroll reading area — tap to advance */}
-          <div className="flex-1 overflow-hidden z-10 relative">
-            <StoryPanel
-              messages={activeMessages}
-              isGenerating={isGenerating}
-              onTapAdvance={handleTapAdvance}
-            />
-          </div>
+      {/* Chat area */}
+      <div className="flex-1 overflow-hidden z-10 relative">
+        <ChatPanel
+          messages={activeMessages}
+          isGenerating={isGenerating}
+          onSendMessage={handleSendMessage}
+          onBranchChoice={handleBranchChoice}
+        />
+      </div>
 
-          {/* Bottom bar — glass morphism */}
-          <div
-            className="flex-none z-20 glass-panel"
-            style={{
-              paddingBottom: "max(12px, env(safe-area-inset-bottom))",
-            }}
-          >
-            {/* Intervention input (slide-up above bottom bar) */}
-            {isIntervening && (
-              <div className="px-4 pt-3 pb-2 animate-slideUp">
-                <div
-                  className="flex items-end gap-2 rounded-2xl px-3 py-2"
-                  style={{
-                    background: "rgba(10,10,30,0.6)",
-                    backdropFilter: "blur(16px)",
-                    border: "1px solid rgba(179,136,255,0.2)",
-                    boxShadow: "0 0 20px rgba(179,136,255,0.06), inset 0 0 20px rgba(179,136,255,0.02)",
-                  }}
-                >
-                  <textarea
-                    ref={interventionInputRef}
-                    value={interventionText}
-                    onChange={(e) => setInterventionText(e.target.value)}
-                    placeholder="나는 여기서 이렇게 할 거야..."
-                    rows={2}
-                    className="flex-1 bg-transparent outline-none resize-none text-[14px] placeholder:text-white/20"
-                    style={{
-                      color: "rgba(255,255,255,0.9)",
-                      caretColor: "#b388ff",
-                      lineHeight: "1.5",
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        if (interventionText.trim()) {
-                          handleIntervene(interventionText.trim());
-                        }
-                      }
-                    }}
-                  />
-                  <button
-                    onClick={() => {
-                      if (interventionText.trim()) {
-                        handleIntervene(interventionText.trim());
-                      }
-                    }}
-                    disabled={!interventionText.trim()}
-                    className="flex-none px-3 py-1.5 rounded-lg text-[12px] transition-all disabled:opacity-30"
-                    style={{
-                      background: "rgba(179,136,255,0.15)",
-                      border: "1px solid rgba(179,136,255,0.3)",
-                      color: "rgba(179,136,255,0.9)",
-                    }}
-                  >
-                    전송
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsIntervening(false);
-                      setInterventionText("");
-                    }}
-                    className="flex-none px-2 py-1.5 rounded-lg text-[12px] transition-all"
-                    style={{ color: "rgba(255,255,255,0.3)" }}
-                  >
-                    취소
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Action buttons */}
-            <div className="flex items-center justify-center gap-3 px-4 py-3">
-              {!isIntervening && (
-                <button
-                  onClick={() => {
-                    setIsIntervening(true);
-                  }}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] transition-all"
-                  style={{
-                    background: "rgba(179,136,255,0.08)",
-                    border: "1px solid rgba(179,136,255,0.25)",
-                    color: "rgba(179,136,255,0.8)",
-                  }}
-                >
-                  <span style={{ fontSize: "14px" }}>&#x270D;&#xFE0E;</span>
-                  개입하기
-                </button>
-              )}
-
-              {/* Sound toggle — right side of bottom bar */}
-              <button
-                onClick={() => {
-                  const n = !soundMuted;
-                  setSoundMuted(n);
-                  setMuted(n);
-                }}
-                className="ml-auto px-2 py-2 rounded-lg text-xs transition-all duration-300"
-                style={{
-                  background: "rgba(0,0,0,0.5)",
-                  border: "1px solid rgba(255,255,255,0.06)",
-                  color: soundMuted
-                    ? "rgba(255,255,255,0.2)"
-                    : "rgba(212,168,83,0.6)",
-                }}
-              >
-                {soundMuted ? "\u{1F507}" : "\u{1F50A}"}
-              </button>
-            </div>
-          </div>
-
-          {/* Full map overlay (from minimap tap) */}
-          {showFullMap && (
-            <MapPanel
-              nodes={nodes}
-              edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onFitView={() => {
-                fitView({ duration: 800, padding: 0.2 });
-                playZoomOut();
-              }}
-              onAnalyze={handleAnalyze}
-              onClose={() => setShowFullMap(false)}
-              isOverlay
-            />
-          )}
-        </>
+      {/* Full map overlay (from minimap tap) */}
+      {showFullMap && (
+        <MapPanel
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onFitView={() => {
+            fitView({ duration: 800, padding: 0.2 });
+            playZoomOut();
+          }}
+          onAnalyze={handleAnalyze}
+          onClose={() => setShowFullMap(false)}
+          isOverlay
+        />
       )}
 
-      {/* ═══ Zoom Mode ═══ */}
-      {viewMode === "zoom" && (
-        <div className="flex-1 z-10 relative overflow-hidden">
-          <ZoomSimulation
-            nodes={zoomNodes}
-            edges={zoomEdges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onSwitchToScroll={() => setViewMode("scroll")}
-            onAnalyze={handleAnalyze}
-          />
-        </div>
-      )}
-
-      {/* Fork effect overlay */}
+      {/* Fork effect */}
       <ForkEffect
         active={showForkEffect}
         onComplete={() => setShowForkEffect(false)}

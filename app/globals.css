@@ -272,3 +272,55 @@ input[type="number"] {
 .animate-forkBurst { animation: forkBurst 1s ease-out forwards; }
 .animate-forkRing { animation: forkRing 0.8s ease-out forwards; }
 .animate-branchSparkle { animation: branchSparkle 0.9s ease-out forwards; }
+
+/* ═══════════════════════════════════════════
+   CSS Star Field Animations
+   ═══════════════════════════════════════════ */
+
+@keyframes twinkle {
+  0%, 100% { opacity: var(--tw-from, 0.2); }
+  50% { opacity: var(--tw-to, 1); }
+}
+
+@keyframes twinkle-large {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.3); }
+}
+
+.star-small {
+  will-change: opacity;
+  animation: twinkle var(--tw-dur, 2s) ease-in-out infinite;
+  animation-delay: var(--tw-delay, 0s);
+}
+
+.star-medium {
+  will-change: opacity;
+  animation: twinkle var(--tw-dur, 2.5s) ease-in-out infinite;
+  animation-delay: var(--tw-delay, 0s);
+}
+
+.star-large {
+  will-change: opacity, transform;
+  animation: twinkle-large var(--tw-dur, 3s) ease-in-out infinite;
+  animation-delay: var(--tw-delay, 0s);
+  box-shadow:
+    0 0 4px 2px rgba(212, 168, 83, 0.6),
+    0 0 12px 4px rgba(212, 168, 83, 0.3),
+    8px 0 6px -4px rgba(212, 168, 83, 0.2),
+    -8px 0 6px -4px rgba(212, 168, 83, 0.2),
+    0 8px 6px -4px rgba(212, 168, 83, 0.2),
+    0 -8px 6px -4px rgba(212, 168, 83, 0.2);
+}
+
+.star-large-purple {
+  will-change: opacity, transform;
+  animation: twinkle-large var(--tw-dur, 3s) ease-in-out infinite;
+  animation-delay: var(--tw-delay, 0s);
+  box-shadow:
+    0 0 4px 2px rgba(179, 136, 255, 0.6),
+    0 0 12px 4px rgba(179, 136, 255, 0.3),
+    8px 0 6px -4px rgba(179, 136, 255, 0.2),
+    -8px 0 6px -4px rgba(179, 136, 255, 0.2),
+    0 8px 6px -4px rgba(179, 136, 255, 0.2),
+    0 -8px 6px -4px rgba(179, 136, 255, 0.2);
+}
