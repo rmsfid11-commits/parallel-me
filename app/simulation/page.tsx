@@ -883,14 +883,6 @@ function SimulationCanvas() {
         <StarField />
       </div>
 
-      {/* Nebula gradient overlay (top) */}
-      <div
-        className="fixed top-0 left-0 right-0 h-40 z-[1] pointer-events-none animate-nebulaBreathe"
-        style={{
-          background: "linear-gradient(to bottom, rgba(30,20,60,0.4), rgba(20,15,40,0.15), transparent)",
-        }}
-      />
-
       {/* Top bar */}
       <div
         className="flex-none z-10 relative glass-panel"

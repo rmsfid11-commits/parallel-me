@@ -4,7 +4,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { ChatMessage as ChatMessageType } from "@/lib/types";
 import ChatMessage from "./ChatMessage";
 import BranchChoices from "./BranchChoices";
-import { BranchPointData } from "@/lib/types";
 
 interface ChatPanelProps {
   messages: ChatMessageType[];
@@ -59,7 +58,12 @@ export default function ChatPanel({
   );
 
   return (
-    <div className="flex flex-col h-full">
+    <div
+      className="flex flex-col h-full"
+      style={{
+        background: "linear-gradient(to bottom, rgba(2,2,8,0.75) 0%, rgba(2,2,8,0.88) 30%, rgba(2,2,8,0.92) 100%)",
+      }}
+    >
       {/* Messages area */}
       <div
         ref={scrollRef}
@@ -91,8 +95,8 @@ export default function ChatPanel({
             <div
               className="rounded-2xl px-4 py-3 flex items-center gap-2"
               style={{
-                background: "rgba(255, 255, 255, 0.04)",
-                border: "1px solid rgba(212, 168, 83, 0.1)",
+                background: "rgba(255, 255, 255, 0.06)",
+                border: "1px solid rgba(212, 168, 83, 0.12)",
                 borderRadius: "20px 20px 20px 4px",
               }}
             >
@@ -120,7 +124,7 @@ export default function ChatPanel({
         className="flex-none px-3 md:px-4 py-3"
         style={{
           borderTop: "1px solid rgba(212, 168, 83, 0.1)",
-          background: "rgba(0, 0, 0, 0.5)",
+          background: "rgba(2, 2, 8, 0.95)",
           backdropFilter: "blur(12px)",
           paddingBottom: "max(12px, env(safe-area-inset-bottom))",
         }}
@@ -128,7 +132,7 @@ export default function ChatPanel({
         <div
           className="flex items-end gap-2 rounded-xl px-3 py-2"
           style={{
-            background: "rgba(255, 255, 255, 0.04)",
+            background: "rgba(255, 255, 255, 0.05)",
             border: "1px solid rgba(212, 168, 83, 0.15)",
           }}
         >
@@ -139,7 +143,7 @@ export default function ChatPanel({
             onKeyDown={handleKeyDown}
             placeholder="계속 / 개입 / 질문..."
             rows={1}
-            className="flex-1 bg-transparent outline-none resize-none text-[14px] md:text-[15px] placeholder:text-white/20"
+            className="flex-1 bg-transparent outline-none resize-none text-[14px] md:text-[15px] placeholder:text-white/25"
             style={{
               color: "rgba(255, 255, 255, 0.9)",
               caretColor: "#d4a853",
