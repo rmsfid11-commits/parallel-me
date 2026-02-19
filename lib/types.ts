@@ -1,15 +1,17 @@
 // ── 시뮬레이션 모드 ──
 export type SimulationMode = "희망적 우주" | "현실적 우주" | "최악의 우주";
 
-// ── 새 UserProfile (8 필드) ──
+// ── UserProfile (온보딩 수집) ──
 export interface UserProfile {
-  birthday: string;      // "1992.04.27"
-  birthTime: string;     // "15:00" 또는 "모름"
-  gender: string;        // "남" | "여" | "말하고 싶지 않음"
-  job: string;
+  birthday: string;           // "1992.04.27"
+  birthTime: string;          // "15:00" 또는 "모름"
+  job: string;                // 직업
+  careerYears: string;        // 경력/연차 "15년", "3년차"
   age: number;
-  interest: string;      // 관심사
-  question: string;      // 미래에서 궁금한 것
+  monthlyIncome: string;      // 월수입 "350만원"
+  interest: string;           // 관심사/하고 싶은 것
+  pastExperience: string;     // 과거 사업/부업 경험
+  question: string;           // 미래에서 궁금한 것
   mode: SimulationMode;
 }
 

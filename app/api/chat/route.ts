@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateChatResponse } from "@/lib/gemini";
 import { UserProfile, ChatMessage } from "@/lib/types";
+import { computeAllAstrology, formatAstrologyForPrompt } from "@/lib/astrology";
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,7 +23,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await generateChatResponse(profile, messages, chosenLabel);
+    // Compute astrology data from profile
+    const astrology = computeAllAstrology(profile.birthday, profile.birthTime);
+    const astrologyText = formatAstrologyForPrompt(astrology);
+
+    const result = await generateChatResponse(profile, messages, chosenLabel, astrologyText);
 
     return NextResponse.json(result);
   } catch (error) {

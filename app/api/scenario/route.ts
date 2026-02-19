@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateAutoScenario } from "@/lib/gemini";
 import { UserProfile, StoryScenario } from "@/lib/types";
+import { computeAllAstrology, formatAstrologyForPrompt } from "@/lib/astrology";
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,10 +23,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Compute astrology data from profile
+    const astrology = computeAllAstrology(profile.birthday, profile.birthTime);
+    const astrologyText = formatAstrologyForPrompt(astrology);
+
     const result = await generateAutoScenario(
       profile,
       previousScenarios || [],
-      intervention
+      intervention,
+      astrologyText
     );
 
     return NextResponse.json({
