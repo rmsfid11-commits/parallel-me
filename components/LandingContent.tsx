@@ -36,15 +36,16 @@ export default function LandingContent() {
 
   return (
     <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4">
-      {/* Sound toggle */}
+      {/* Sound toggle — glass morphism */}
       {soundStarted && (
         <button
           onClick={toggleMute}
-          className="fixed top-5 right-5 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 z-50"
+          className="fixed top-5 right-5 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 z-50"
           style={{
-            background: "rgba(0,0,0,0.4)",
-            border: "1px solid rgba(212, 168, 83, 0.2)",
-            backdropFilter: "blur(8px)",
+            background: "rgba(5,5,20,0.5)",
+            border: "1px solid rgba(212, 168, 83, 0.15)",
+            backdropFilter: "blur(12px)",
+            boxShadow: "0 0 20px rgba(0,0,0,0.3)",
           }}
         >
           <span className="text-base" style={{ color: "rgba(212, 168, 83, 0.7)" }}>
@@ -54,13 +55,13 @@ export default function LandingContent() {
       )}
 
       <div className="text-center animate-fadeIn">
-        {/* Logo */}
+        {/* Logo — enhanced glow */}
         <h1
-          className="text-5xl md:text-7xl font-light tracking-wide text-white"
+          className="text-5xl md:text-7xl font-light tracking-wide text-white animate-glowPulse"
           style={{
             fontFamily: "var(--font-display), serif",
             textShadow:
-              "0 0 40px rgba(212, 168, 83, 0.4), 0 0 80px rgba(179, 136, 255, 0.2)",
+              "0 0 40px rgba(212, 168, 83, 0.4), 0 0 80px rgba(179, 136, 255, 0.2), 0 0 120px rgba(99, 102, 241, 0.1)",
           }}
         >
           Parallel Me
@@ -68,16 +69,36 @@ export default function LandingContent() {
 
         {/* Subtitle */}
         <p
-          className="mt-4 text-base md:text-lg text-white/50 tracking-widest animate-fadeInSlow"
-          style={{ fontFamily: "var(--font-display), serif" }}
+          className="mt-5 text-base md:text-lg text-white/45 tracking-widest animate-fadeInSlow"
+          style={{
+            fontFamily: "var(--font-display), serif",
+            textShadow: "0 0 20px rgba(179,136,255,0.1)",
+          }}
         >
           당신조차 몰랐던 당신의 우주를 추적합니다
         </p>
 
-        {/* CTA */}
+        {/* CTA — glass morphism button */}
         <Link
           href="/onboarding"
-          className="inline-block mt-10 px-8 py-3.5 border border-amber-500/40 bg-amber-500/5 backdrop-blur-sm rounded-full text-amber-300/90 text-sm tracking-wider hover:bg-amber-500/15 hover:border-amber-400/60 hover:shadow-[0_0_30px_rgba(212,168,83,0.2)] transition-all duration-500 animate-fadeInSlow2"
+          className="inline-block mt-12 px-10 py-4 rounded-full text-sm tracking-wider transition-all duration-700 animate-fadeInSlow2"
+          style={{
+            background: "linear-gradient(135deg, rgba(212,168,83,0.08), rgba(179,136,255,0.05))",
+            border: "1px solid rgba(212,168,83,0.3)",
+            color: "rgba(212,168,83,0.9)",
+            backdropFilter: "blur(12px)",
+            boxShadow: "0 0 30px rgba(212,168,83,0.1), 0 0 60px rgba(179,136,255,0.05), inset 0 0 30px rgba(212,168,83,0.03)",
+          }}
+          onMouseEnter={(e) => {
+            const el = e.currentTarget as HTMLElement;
+            el.style.boxShadow = "0 0 40px rgba(212,168,83,0.2), 0 0 80px rgba(179,136,255,0.1), inset 0 0 40px rgba(212,168,83,0.05)";
+            el.style.borderColor = "rgba(212,168,83,0.5)";
+          }}
+          onMouseLeave={(e) => {
+            const el = e.currentTarget as HTMLElement;
+            el.style.boxShadow = "0 0 30px rgba(212,168,83,0.1), 0 0 60px rgba(179,136,255,0.05), inset 0 0 30px rgba(212,168,83,0.03)";
+            el.style.borderColor = "rgba(212,168,83,0.3)";
+          }}
         >
           나의 우주 열기
         </Link>
@@ -85,8 +106,11 @@ export default function LandingContent() {
         {/* Sound hint */}
         {!soundStarted && (
           <p
-            className="mt-6 text-[11px] animate-fadeInSlow2"
-            style={{ color: "rgba(255,255,255,0.2)" }}
+            className="mt-8 text-[11px] animate-fadeInSlow2"
+            style={{
+              color: "rgba(255,255,255,0.15)",
+              textShadow: "0 0 10px rgba(179,136,255,0.1)",
+            }}
           >
             화면을 터치하면 우주의 소리가 시작됩니다
           </p>

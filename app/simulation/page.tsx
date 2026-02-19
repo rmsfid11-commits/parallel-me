@@ -16,11 +16,9 @@ import {
   UserProfile,
   ChatMessage,
   Timeline,
-  BranchPointData,
   StoryScenario,
 } from "@/lib/types";
 import { type ScenarioNodeData } from "@/components/ScenarioNode";
-import ChatPanel from "@/components/ChatPanel";
 import MapPanel from "@/components/MapPanel";
 import MiniMap from "@/components/MiniMap";
 import StoryPanel from "@/components/StoryPanel";
@@ -34,8 +32,6 @@ import {
   playZoomOut,
   setMuted,
 } from "@/lib/sounds";
-
-type ViewTab = "story" | "map" | "chat";
 
 // ── 되돌리기 확인 모달 ──
 function RewindModal({
@@ -54,7 +50,15 @@ function RewindModal({
         className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fadeIn"
         onClick={onCancel}
       />
-      <div className="relative w-full max-w-sm bg-[#0a0a1a] border border-purple-500/30 rounded-2xl p-6 shadow-2xl animate-slideUp">
+      <div
+        className="relative w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-slideUp"
+        style={{
+          background: "rgba(8, 8, 25, 0.85)",
+          backdropFilter: "blur(24px)",
+          border: "1px solid rgba(179,136,255,0.2)",
+          boxShadow: "0 0 40px rgba(179,136,255,0.08), 0 0 80px rgba(0,0,0,0.5)",
+        }}
+      >
         <h3 className="text-lg font-bold text-white mb-3">
           이 우주를 탐험할까?
         </h3>
@@ -107,7 +111,15 @@ function ReportModal({
         className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fadeIn"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-md bg-[#0a0a1a] border border-amber-500/30 rounded-2xl p-6 shadow-2xl animate-slideUp max-h-[80vh] overflow-y-auto">
+      <div
+        className="relative w-full max-w-md rounded-2xl p-6 shadow-2xl animate-slideUp max-h-[80vh] overflow-y-auto"
+        style={{
+          background: "rgba(8, 8, 25, 0.85)",
+          backdropFilter: "blur(24px)",
+          border: "1px solid rgba(212,168,83,0.2)",
+          boxShadow: "0 0 40px rgba(212,168,83,0.08), 0 0 80px rgba(0,0,0,0.5)",
+        }}
+      >
         <h3 className="text-lg font-bold text-white mb-4">나의 우주 분석</h3>
         {isLoading ? (
           <div className="flex items-center gap-3 py-10 justify-center">
@@ -154,12 +166,7 @@ function SimulationCanvas() {
   // Profile
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
-  // View tab
-  const [activeTab, setActiveTab] = useState<ViewTab>("story");
-  const [fadingOut, setFadingOut] = useState(false);
-  const [displayedTab, setDisplayedTab] = useState<ViewTab>("story");
-
-  // Timelines (shared data for chat + map)
+  // Timelines (shared data for story + map)
   const [timelines, setTimelines] = useState<Timeline[]>([]);
   const [activeTimelineId, setActiveTimelineId] = useState<string>("");
   const timelinesRef = useRef<Timeline[]>([]);
@@ -178,11 +185,19 @@ function SimulationCanvas() {
   isPausedRef.current = isPaused;
   const autoProgressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Intervention UI
+  const [isIntervening, setIsIntervening] = useState(false);
+  const [interventionText, setInterventionText] = useState("");
+  const interventionInputRef = useRef<HTMLTextAreaElement>(null);
+
   // UI
   const [isGenerating, setIsGenerating] = useState(false);
   const [showFullMap, setShowFullMap] = useState(false);
   const [soundMuted, setSoundMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // First branch tracking
+  const isFirstBranchRef = useRef(true);
 
   // Map (ReactFlow)
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -210,20 +225,6 @@ function SimulationCanvas() {
   const isGeneratingRef = useRef(false);
   isGeneratingRef.current = isGenerating;
 
-  // ── Tab switching with fade ──
-  const switchTab = useCallback(
-    (tab: ViewTab) => {
-      if (tab === activeTab) return;
-      setFadingOut(true);
-      setTimeout(() => {
-        setActiveTab(tab);
-        setDisplayedTab(tab);
-        setFadingOut(false);
-      }, 200);
-    },
-    [activeTab]
-  );
-
   // ── Audio init ──
   useEffect(() => {
     const initAudio = () => {
@@ -240,9 +241,9 @@ function SimulationCanvas() {
     };
   }, []);
 
-  // ── Load profile ──
+  // ── Load profile from localStorage ──
   useEffect(() => {
-    const stored = sessionStorage.getItem("parallelme-profile");
+    const stored = localStorage.getItem("parallelme-profile");
     if (!stored) {
       router.push("/");
       return;
@@ -250,6 +251,22 @@ function SimulationCanvas() {
     try {
       const p = JSON.parse(stored) as UserProfile;
       setProfile(p);
+
+      // Try restore simulation data from localStorage
+      const savedSim = localStorage.getItem("parallelme-simulation");
+      if (savedSim) {
+        try {
+          const { timelines: savedTl, activeTimelineId: savedAtl } = JSON.parse(savedSim);
+          if (savedTl && savedTl.length > 0) {
+            setTimelines(savedTl);
+            setActiveTimelineId(savedAtl || savedTl[0].id);
+            return;
+          }
+        } catch {
+          // ignore, create fresh
+        }
+      }
+
       const tl: Timeline = {
         id: crypto.randomUUID(),
         parentTimelineId: null,
@@ -263,6 +280,35 @@ function SimulationCanvas() {
       router.push("/");
     }
   }, [router]);
+
+  // ── Persist simulation data to localStorage ──
+  useEffect(() => {
+    if (timelines.length > 0 && activeTimelineId) {
+      localStorage.setItem(
+        "parallelme-simulation",
+        JSON.stringify({ timelines, activeTimelineId })
+      );
+    }
+  }, [timelines, activeTimelineId]);
+
+  // ── Swipe / beforeunload protection ──
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const msgs = timelinesRef.current.flatMap((t) => t.messages);
+      if (msgs.length > 0) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
+  // ── Focus intervention input ──
+  useEffect(() => {
+    if (isIntervening && interventionInputRef.current) {
+      interventionInputRef.current.focus();
+    }
+  }, [isIntervening]);
 
   // ── Helpers ──
   const getActiveMessages = useCallback((): ChatMessage[] => {
@@ -331,6 +377,18 @@ function SimulationCanvas() {
         const data = await res.json();
         const tlId = activeTimelineIdRef.current;
 
+        // If this is the first branch, insert a system message
+        if (interventionText && isFirstBranchRef.current) {
+          isFirstBranchRef.current = false;
+          const systemMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: "방금 다른 우주도 하나 태어났어. 상단 맵에서 볼 수 있어. 네가 선택하지 않은 길도 어딘가에서 흐르고 있어.",
+            timestamp: Date.now(),
+          };
+          updateTimelineMessages(tlId, (msgs) => [...msgs, systemMsg]);
+        }
+
         // Add scenario as an assistant message with timeLabel
         const aiMsg: ChatMessage = {
           id: crypto.randomUUID(),
@@ -359,17 +417,10 @@ function SimulationCanvas() {
     [profile, getStoryScenariosFromMessages, updateTimelineMessages]
   );
 
-  // ── Story: auto-progress loop ──
+  // ── Story: auto-progress loop (2 seconds) ──
   useEffect(() => {
-    if (
-      activeTab !== "story" ||
-      !profile ||
-      isPaused ||
-      isGenerating
-    )
-      return;
+    if (!profile || isPaused || isGenerating) return;
 
-    // Don't auto-progress if there are no messages yet and we haven't started
     const msgs = getActiveMessages();
     if (msgs.length === 0) {
       // Start first scenario
@@ -377,16 +428,15 @@ function SimulationCanvas() {
       return;
     }
 
-    // Schedule next scenario after 3 seconds
+    // Schedule next scenario after 2 seconds
     autoProgressRef.current = setTimeout(() => {
       if (
         !isPausedRef.current &&
-        !isGeneratingRef.current &&
-        activeTab === "story"
+        !isGeneratingRef.current
       ) {
         generateStoryScenario();
       }
-    }, 3000);
+    }, 2000);
 
     return () => {
       if (autoProgressRef.current) {
@@ -395,7 +445,7 @@ function SimulationCanvas() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, profile, isPaused, isGenerating, timelines]);
+  }, [profile, isPaused, isGenerating, timelines]);
 
   // ── Story: handle intervention ──
   const handleIntervene = useCallback(
@@ -419,6 +469,8 @@ function SimulationCanvas() {
 
       // Resume after intervention
       setIsPaused(false);
+      setIsIntervening(false);
+      setInterventionText("");
     },
     [profile, updateTimelineMessages, generateStoryScenario]
   );
@@ -505,7 +557,6 @@ function SimulationCanvas() {
         let prevBranchNodeId: string | undefined;
 
         for (const msg of timeline.messages) {
-          // Include both branch points (chat) and story scenarios with timeLabels
           if (
             msg.role === "assistant" &&
             (msg.branchPoint || msg.timeLabel)
@@ -659,126 +710,6 @@ function SimulationCanvas() {
       rebuildGraph(timelines, activeTimelineId);
   }, [timelines, activeTimelineId, rebuildGraph]);
 
-  // ── Chat: Send message ──
-  const sendMessage = useCallback(
-    async (text: string) => {
-      if (!profile || isGeneratingRef.current) return;
-      const userMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: text,
-        timestamp: Date.now(),
-      };
-      const tlId = activeTimelineIdRef.current;
-      updateTimelineMessages(tlId, (msgs) => [...msgs, userMsg]);
-
-      setIsGenerating(true);
-      isGeneratingRef.current = true;
-      try {
-        const currentMsgs = [
-          ...(timelinesRef.current.find((t) => t.id === tlId)
-            ?.messages || []),
-          userMsg,
-        ];
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ profile, messages: currentMsgs }),
-        });
-        if (!res.ok) {
-          const d = await res.json();
-          throw new Error(d.error || "응답 생성 실패");
-        }
-        const data = await res.json();
-        const aiMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: data.text,
-          branchPoint: data.branchPoint,
-          timestamp: Date.now(),
-        };
-        updateTimelineMessages(tlId, (msgs) => [...msgs, aiMsg]);
-        if (data.branchPoint) playBranchCreate();
-        else playNodeCreate();
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "오류가 발생했습니다."
-        );
-      } finally {
-        setIsGenerating(false);
-        isGeneratingRef.current = false;
-      }
-    },
-    [profile, updateTimelineMessages]
-  );
-
-  // ── Chat: Branch choice ──
-  const handleBranchChoice = useCallback(
-    async (msgId: string, label: string, index: number) => {
-      if (!profile || isGeneratingRef.current) return;
-      const tlId = activeTimelineIdRef.current;
-
-      updateTimelineMessages(tlId, (msgs) =>
-        msgs.map((m) =>
-          m.id === msgId && m.branchPoint
-            ? {
-                ...m,
-                branchPoint: { ...m.branchPoint, chosenIndex: index },
-              }
-            : m
-        )
-      );
-
-      setIsGenerating(true);
-      isGeneratingRef.current = true;
-      try {
-        const currentMsgs =
-          timelinesRef.current.find((t) => t.id === tlId)?.messages ||
-          [];
-        const updatedMsgs = currentMsgs.map((m) =>
-          m.id === msgId && m.branchPoint
-            ? {
-                ...m,
-                branchPoint: { ...m.branchPoint, chosenIndex: index },
-              }
-            : m
-        );
-
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            profile,
-            messages: updatedMsgs,
-            chosenLabel: label,
-          }),
-        });
-        if (!res.ok) {
-          const d = await res.json();
-          throw new Error(d.error || "응답 생성 실패");
-        }
-        const data = await res.json();
-        const aiMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: data.text,
-          branchPoint: data.branchPoint,
-          timestamp: Date.now(),
-        };
-        updateTimelineMessages(tlId, (msgs) => [...msgs, aiMsg]);
-        playNodeCreate();
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "오류가 발생했습니다."
-        );
-      } finally {
-        setIsGenerating(false);
-        isGeneratingRef.current = false;
-      }
-    },
-    [profile, updateTimelineMessages]
-  );
-
   // ── Rewind ──
   const handleRewind = useCallback(async () => {
     if (!profile || isGeneratingRef.current) return;
@@ -819,23 +750,35 @@ function SimulationCanvas() {
     setIsGenerating(true);
     isGeneratingRef.current = true;
     try {
-      const res = await fetch("/api/chat", {
+      const scenarios = copied
+        .filter((m) => m.role === "assistant" && m.timeLabel)
+        .map((m) => ({
+          id: m.id,
+          timeLabel: m.timeLabel || "",
+          content: m.content,
+          autoChoice: undefined,
+          isBranch: false,
+          parentId: null,
+          timelineId: newTl.id,
+        }));
+
+      const res = await fetch("/api/scenario", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           profile,
-          messages: copied,
-          chosenLabel: choiceLabel,
+          previousScenarios: scenarios,
+          intervention: choiceLabel,
         }),
       });
-      if (!res.ok) throw new Error("응답 생성 실패");
+      if (!res.ok) throw new Error("시나리오 생성 실패");
       const data = await res.json();
       const aiMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: data.text,
-        branchPoint: data.branchPoint,
+        content: data.content,
         timestamp: Date.now(),
+        timeLabel: data.timeLabel,
       };
       setTimelines((prev) =>
         prev.map((t) =>
@@ -887,7 +830,7 @@ function SimulationCanvas() {
     }
     if (summaries.length === 0) {
       setReportText(
-        "아직 분기점이 없어. 대화를 더 나눠보면 갈림길이 생길 거야."
+        "아직 분기점이 없어. 개입을 더 해보면 갈림길이 생길 거야."
       );
       setReportLoading(false);
       return;
@@ -908,59 +851,6 @@ function SimulationCanvas() {
     }
   }, [profile]);
 
-  // ── Auto-start chat mode (when switching to chat with empty messages) ──
-  useEffect(() => {
-    if (
-      activeTab === "chat" &&
-      profile &&
-      timelines.length >= 1 &&
-      getActiveMessages().length === 0 &&
-      !isGenerating
-    ) {
-      const firstMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: "안녕, 내 미래를 보여줘.",
-        timestamp: Date.now(),
-      };
-      const tlId = timelines[0].id;
-      updateTimelineMessages(tlId, () => [firstMsg]);
-      setIsGenerating(true);
-      isGeneratingRef.current = true;
-
-      fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profile, messages: [firstMsg] }),
-      })
-        .then(async (res) => {
-          if (!res.ok) throw new Error("첫 응답 생성 실패");
-          const data = await res.json();
-          const aiMsg: ChatMessage = {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            content: data.text,
-            branchPoint: data.branchPoint,
-            timestamp: Date.now(),
-          };
-          updateTimelineMessages(tlId, (msgs) => [...msgs, aiMsg]);
-          playNodeCreate();
-        })
-        .catch((err) =>
-          setError(
-            err instanceof Error
-              ? err.message
-              : "오류가 발생했습니다."
-          )
-        )
-        .finally(() => {
-          setIsGenerating(false);
-          isGeneratingRef.current = false;
-        });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, profile, timelines.length]);
-
   // Loading
   if (!profile) {
     return (
@@ -976,28 +866,28 @@ function SimulationCanvas() {
   const activeMessages = getActiveMessages();
   const branchNodesForMinimap = collectBranchNodes();
 
-  const TABS: { key: ViewTab; label: string }[] = [
-    { key: "story", label: "스토리" },
-    { key: "map", label: "맵" },
-    { key: "chat", label: "채팅" },
-  ];
-
   return (
     <div
       className="w-screen h-screen flex flex-col"
-      style={{ background: "#000" }}
+      style={{ background: "#000", touchAction: "pan-y" }}
     >
       {/* StarField behind everything */}
       <div className="fixed inset-0 z-0 pointer-events-none">
         <StarField />
       </div>
 
-      {/* Top bar */}
+      {/* Nebula gradient overlay (top) */}
       <div
-        className="flex-none z-10 relative"
+        className="fixed top-0 left-0 right-0 h-40 z-[1] pointer-events-none animate-nebulaBreathe"
         style={{
-          background: "rgba(0,0,0,0.85)",
-          borderBottom: "1px solid rgba(212,168,83,0.08)",
+          background: "linear-gradient(to bottom, rgba(30,20,60,0.4), rgba(20,15,40,0.15), transparent)",
+        }}
+      />
+
+      {/* Top bar — glass morphism */}
+      <div
+        className="flex-none z-10 relative glass-panel"
+        style={{
           paddingTop: "max(8px, env(safe-area-inset-top))",
         }}
       >
@@ -1007,7 +897,7 @@ function SimulationCanvas() {
             className="text-sm text-white/80 tracking-wide"
             style={{
               fontFamily: "var(--font-display), serif",
-              textShadow: "0 0 20px rgba(212,168,83,0.3)",
+              textShadow: "0 0 25px rgba(212,168,83,0.4), 0 0 50px rgba(179,136,255,0.15)",
             }}
           >
             Parallel Me
@@ -1043,25 +933,6 @@ function SimulationCanvas() {
               </div>
             )}
 
-            {/* Mute */}
-            <button
-              onClick={() => {
-                const n = !soundMuted;
-                setSoundMuted(n);
-                setMuted(n);
-              }}
-              className="px-1.5 py-1 rounded-lg text-xs transition-all duration-300"
-              style={{
-                background: "rgba(0,0,0,0.5)",
-                border: "1px solid rgba(255,255,255,0.06)",
-                color: soundMuted
-                  ? "rgba(255,255,255,0.2)"
-                  : "rgba(212,168,83,0.6)",
-              }}
-            >
-              {soundMuted ? "\u{1F507}" : "\u{1F50A}"}
-            </button>
-
             {/* Home */}
             <button
               onClick={() => router.push("/")}
@@ -1075,33 +946,6 @@ function SimulationCanvas() {
               처음으로
             </button>
           </div>
-        </div>
-
-        {/* Tab bar */}
-        <div className="flex justify-center gap-1 px-3 pb-2">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => switchTab(tab.key)}
-              className="px-4 py-1.5 rounded-lg text-[12px] transition-all duration-300"
-              style={{
-                background:
-                  activeTab === tab.key
-                    ? "rgba(212,168,83,0.12)"
-                    : "transparent",
-                border:
-                  activeTab === tab.key
-                    ? "1px solid rgba(212,168,83,0.3)"
-                    : "1px solid transparent",
-                color:
-                  activeTab === tab.key
-                    ? "rgba(212,168,83,0.9)"
-                    : "rgba(255,255,255,0.3)",
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -1119,49 +963,157 @@ function SimulationCanvas() {
         />
       </div>
 
-      {/* Content area with fade transition */}
+      {/* Scroll reading area */}
+      <div className="flex-1 overflow-hidden z-10 relative">
+        <StoryPanel
+          messages={activeMessages}
+          isGenerating={isGenerating}
+        />
+      </div>
+
+      {/* Bottom bar — glass morphism */}
       <div
-        className="flex-1 overflow-hidden z-10 relative transition-opacity duration-200"
-        style={{ opacity: fadingOut ? 0 : 1 }}
+        className="flex-none z-20 glass-panel"
+        style={{
+          paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+        }}
       >
-        {displayedTab === "story" && (
-          <StoryPanel
-            messages={activeMessages}
-            isGenerating={isGenerating}
-            isPaused={isPaused}
-            onPause={() => setIsPaused(true)}
-            onResume={() => setIsPaused(false)}
-            onIntervene={handleIntervene}
-          />
+        {/* Intervention input (slide-up above bottom bar) */}
+        {isIntervening && (
+          <div className="px-4 pt-3 pb-2 animate-slideUp">
+            <div
+              className="flex items-end gap-2 rounded-2xl px-3 py-2"
+              style={{
+                background: "rgba(10,10,30,0.6)",
+                backdropFilter: "blur(16px)",
+                border: "1px solid rgba(179,136,255,0.2)",
+                boxShadow: "0 0 20px rgba(179,136,255,0.06), inset 0 0 20px rgba(179,136,255,0.02)",
+              }}
+            >
+              <textarea
+                ref={interventionInputRef}
+                value={interventionText}
+                onChange={(e) => setInterventionText(e.target.value)}
+                placeholder="나는 여기서 이렇게 할 거야..."
+                rows={2}
+                className="flex-1 bg-transparent outline-none resize-none text-[14px] placeholder:text-white/20"
+                style={{
+                  color: "rgba(255,255,255,0.9)",
+                  caretColor: "#b388ff",
+                  lineHeight: "1.5",
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (interventionText.trim()) {
+                      handleIntervene(interventionText.trim());
+                    }
+                  }
+                }}
+              />
+              <button
+                onClick={() => {
+                  if (interventionText.trim()) {
+                    handleIntervene(interventionText.trim());
+                  }
+                }}
+                disabled={!interventionText.trim()}
+                className="flex-none px-3 py-1.5 rounded-lg text-[12px] transition-all disabled:opacity-30"
+                style={{
+                  background: "rgba(179,136,255,0.15)",
+                  border: "1px solid rgba(179,136,255,0.3)",
+                  color: "rgba(179,136,255,0.9)",
+                }}
+              >
+                전송
+              </button>
+              <button
+                onClick={() => {
+                  setIsIntervening(false);
+                  setInterventionText("");
+                }}
+                className="flex-none px-2 py-1.5 rounded-lg text-[12px] transition-all"
+                style={{ color: "rgba(255,255,255,0.3)" }}
+              >
+                취소
+              </button>
+            </div>
+          </div>
         )}
 
-        {displayedTab === "chat" && (
-          <ChatPanel
-            messages={activeMessages}
-            isGenerating={isGenerating}
-            onSendMessage={sendMessage}
-            onBranchChoice={handleBranchChoice}
-          />
-        )}
+        {/* Action buttons */}
+        <div className="flex items-center justify-center gap-3 px-4 py-3">
+          {!isPaused && !isIntervening && (
+            <button
+              onClick={() => setIsPaused(true)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] transition-all"
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                color: "rgba(255,255,255,0.5)",
+              }}
+            >
+              <span style={{ fontSize: "14px" }}>&#x23F8;&#xFE0E;</span>
+              멈추기
+            </button>
+          )}
 
-        {displayedTab === "map" && (
-          <MapPanel
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onFitView={() => {
-              fitView({ duration: 800, padding: 0.2 });
-              playZoomOut();
+          {!isIntervening && (
+            <button
+              onClick={() => {
+                setIsIntervening(true);
+                setIsPaused(true);
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] transition-all"
+              style={{
+                background: "rgba(179,136,255,0.08)",
+                border: "1px solid rgba(179,136,255,0.25)",
+                color: "rgba(179,136,255,0.8)",
+              }}
+            >
+              <span style={{ fontSize: "14px" }}>&#x270D;&#xFE0E;</span>
+              개입하기
+            </button>
+          )}
+
+          {isPaused && !isIntervening && (
+            <button
+              onClick={() => setIsPaused(false)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] transition-all"
+              style={{
+                background: "rgba(212,168,83,0.1)",
+                border: "1px solid rgba(212,168,83,0.3)",
+                color: "rgba(212,168,83,0.9)",
+              }}
+            >
+              <span style={{ fontSize: "14px" }}>&#x25B6;&#xFE0E;</span>
+              계속
+            </button>
+          )}
+
+          {/* Sound toggle — right side of bottom bar */}
+          <button
+            onClick={() => {
+              const n = !soundMuted;
+              setSoundMuted(n);
+              setMuted(n);
             }}
-            onAnalyze={handleAnalyze}
-            onClose={() => switchTab("story")}
-          />
-        )}
+            className="ml-auto px-2 py-2 rounded-lg text-xs transition-all duration-300"
+            style={{
+              background: "rgba(0,0,0,0.5)",
+              border: "1px solid rgba(255,255,255,0.06)",
+              color: soundMuted
+                ? "rgba(255,255,255,0.2)"
+                : "rgba(212,168,83,0.6)",
+            }}
+          >
+            {soundMuted ? "\u{1F507}" : "\u{1F50A}"}
+          </button>
+        </div>
       </div>
 
       {/* Full map overlay (from minimap tap) */}
-      {showFullMap && displayedTab !== "map" && (
+      {showFullMap && (
         <MapPanel
           nodes={nodes}
           edges={edges}

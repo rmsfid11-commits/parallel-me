@@ -21,11 +21,21 @@ interface Mote {
   isGold: boolean;
 }
 
+interface NebulaCloud {
+  x: number; y: number;
+  radius: number;
+  r: number; g: number; b: number;
+  opacity: number;
+  driftX: number; driftY: number;
+  phase: number;
+  breatheSpeed: number;
+}
+
 function createStars(): Star[] {
   const stars: Star[] = [];
 
   // Tiny dust
-  for (let i = 0; i < 160; i++) {
+  for (let i = 0; i < 280; i++) {
     stars.push({
       x: Math.random(), y: Math.random(),
       size: Math.random() * 0.7 + 0.3,
@@ -54,13 +64,13 @@ function createStars(): Star[] {
     });
   }
 
-  // Bright accent stars with cross flare
-  for (let i = 0; i < 8; i++) {
+  // Bright accent stars with cross flare (gold/purple, 3-4px)
+  for (let i = 0; i < 20; i++) {
     const isGold = Math.random() > 0.4;
     stars.push({
       x: Math.random(), y: Math.random(),
-      size: Math.random() * 1.2 + 1.3,
-      glowSize: 8 + Math.random() * 6,
+      size: Math.random() * 1.5 + 2.0,
+      glowSize: 10 + Math.random() * 8,
       speed: 0.15 + Math.random() * 0.25,
       phase: Math.random() * Math.PI * 2,
       r: isGold ? 212 : 190,
@@ -92,10 +102,46 @@ function createMotes(count: number): Mote[] {
   return motes;
 }
 
+function createNebulaClouds(): NebulaCloud[] {
+  const clouds: NebulaCloud[] = [];
+
+  // Deep indigo/navy nebula patches
+  const palette = [
+    { r: 30, g: 20, b: 80 },    // deep indigo
+    { r: 60, g: 30, b: 100 },   // purple nebula
+    { r: 20, g: 15, b: 60 },    // dark navy
+    { r: 80, g: 50, b: 30 },    // warm amber nebula
+    { r: 40, g: 20, b: 70 },    // violet
+    { r: 15, g: 25, b: 55 },    // deep blue
+  ];
+
+  for (let i = 0; i < 6; i++) {
+    const color = palette[i % palette.length];
+    const angle = Math.random() * Math.PI * 2;
+    const driftSpeed = 0.002 + Math.random() * 0.004;
+    clouds.push({
+      x: 0.1 + Math.random() * 0.8,
+      y: 0.1 + Math.random() * 0.8,
+      radius: 0.15 + Math.random() * 0.2,
+      r: color.r,
+      g: color.g,
+      b: color.b,
+      opacity: 0.06 + Math.random() * 0.08,
+      driftX: Math.cos(angle) * driftSpeed,
+      driftY: Math.sin(angle) * driftSpeed,
+      phase: Math.random() * Math.PI * 2,
+      breatheSpeed: 0.15 + Math.random() * 0.15,
+    });
+  }
+
+  return clouds;
+}
+
 export default function StarField() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const starsRef = useRef<Star[]>(createStars());
   const motesRef = useRef<Mote[]>(createMotes(40));
+  const nebulaRef = useRef<NebulaCloud[]>(createNebulaClouds());
   const rafRef = useRef<number>(0);
 
   useEffect(() => {
@@ -120,12 +166,44 @@ export default function StarField() {
 
     const stars = starsRef.current;
     const motes = motesRef.current;
+    const nebulae = nebulaRef.current;
 
     const draw = (time: number) => {
       const t = time * 0.001;
       const w = canvas.width / dpr;
       const h = canvas.height / dpr;
       ctx.clearRect(0, 0, w, h);
+
+      // ── Nebula clouds (drawn first, behind everything) ──
+      for (const cloud of nebulae) {
+        // Slow drift
+        cloud.x += cloud.driftX / w;
+        cloud.y += cloud.driftY / h;
+        // Wrap around softly
+        if (cloud.x < -0.3) cloud.x = 1.3;
+        if (cloud.x > 1.3) cloud.x = -0.3;
+        if (cloud.y < -0.3) cloud.y = 1.3;
+        if (cloud.y > 1.3) cloud.y = -0.3;
+
+        const breathe = Math.sin(t * cloud.breatheSpeed + cloud.phase) * 0.3 + 0.7;
+        const alpha = cloud.opacity * breathe;
+        const cx = cloud.x * w;
+        const cy = cloud.y * h;
+        const r = cloud.radius * Math.max(w, h);
+
+        // Color shift over time
+        const colorShift = Math.sin(t * 0.05 + cloud.phase) * 0.5 + 0.5;
+        const nr = cloud.r + colorShift * 15;
+        const ng = cloud.g + colorShift * 10;
+        const nb = cloud.b + colorShift * 20;
+
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        grad.addColorStop(0, `rgba(${nr}, ${ng}, ${nb}, ${alpha})`);
+        grad.addColorStop(0.4, `rgba(${nr}, ${ng}, ${nb}, ${alpha * 0.5})`);
+        grad.addColorStop(1, "transparent");
+        ctx.fillStyle = grad;
+        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      }
 
       // ── Stars ──
       for (const s of stars) {
@@ -137,7 +215,8 @@ export default function StarField() {
         // Glow halo
         if (s.glowSize > 0) {
           const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, s.glowSize);
-          glow.addColorStop(0, `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha * 0.12})`);
+          glow.addColorStop(0, `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha * 0.15})`);
+          glow.addColorStop(0.5, `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha * 0.05})`);
           glow.addColorStop(1, "transparent");
           ctx.fillStyle = glow;
           ctx.fillRect(sx - s.glowSize, sy - s.glowSize, s.glowSize * 2, s.glowSize * 2);
@@ -145,8 +224,8 @@ export default function StarField() {
 
         // Cross flare
         if (s.hasFlare) {
-          const flareLen = s.size * 5 * twinkle;
-          ctx.strokeStyle = `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha * 0.2})`;
+          const flareLen = s.size * 6 * twinkle;
+          ctx.strokeStyle = `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha * 0.18})`;
           ctx.lineWidth = 0.5;
           ctx.beginPath();
           ctx.moveTo(sx - flareLen, sy);
@@ -155,6 +234,18 @@ export default function StarField() {
           ctx.beginPath();
           ctx.moveTo(sx, sy - flareLen);
           ctx.lineTo(sx, sy + flareLen);
+          ctx.stroke();
+
+          // Diagonal flares for extra sparkle
+          const diagLen = flareLen * 0.5;
+          ctx.strokeStyle = `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha * 0.08})`;
+          ctx.beginPath();
+          ctx.moveTo(sx - diagLen, sy - diagLen);
+          ctx.lineTo(sx + diagLen, sy + diagLen);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(sx + diagLen, sy - diagLen);
+          ctx.lineTo(sx - diagLen, sy + diagLen);
           ctx.stroke();
         }
 
@@ -189,9 +280,10 @@ export default function StarField() {
         const b = m.isGold ? 150 : 255;
 
         // Soft glow
-        const glowR = m.size * 5;
+        const glowR = m.size * 6;
         const glow = ctx.createRadialGradient(mx, my, 0, mx, my, glowR);
-        glow.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${alpha * 0.25})`);
+        glow.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${alpha * 0.3})`);
+        glow.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${alpha * 0.08})`);
         glow.addColorStop(1, "transparent");
         ctx.fillStyle = glow;
         ctx.fillRect(mx - glowR, my - glowR, glowR * 2, glowR * 2);
@@ -224,7 +316,7 @@ export default function StarField() {
         inset: 0,
         zIndex: 0,
         pointerEvents: "none",
-        background: "#000000",
+        background: "#020208",
       }}
     />
   );

@@ -4,17 +4,19 @@ import { UserProfile, ChatMessage, BranchPointData, StoryScenario } from "./type
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 // ══════════════════════════════════════════
-// 온보딩 반응
+// 온보딩 반응 (11단계, 0-10)
 // ══════════════════════════════════════════
 
 const ONBOARDING_LENSES: Record<number, string> = {
-  0: "사주팔자/만세력 기반으로 성향을 한 마디로 읽어줘. 생년월일의 천간지지를 해석해서 핵심 기질을 꿰뚫어.",
-  1: "태어난 시간을 결합해 수비학(생명수)과 시주를 심화해. 모르면 마야달력의 킨 번호와 태양 문장으로 대체 해석. '그래도 괜찮아'로 시작.",
-  2: "직업/현재 상태에서 에니어그램 유형을 읽어줘. '에니어그램으로 보면 너는~' 느낌.",
-  3: "경력 연차 정보로 이 사람의 커리어 궤적을 한 마디로 읽어줘. 바이오리듬이나 생애주기 느낌. '15년이면 눈 감고도 하겠네. 근데 그게 오히려 문제지.' 같은 톤.",
-  4: "월수입 정보를 담담하게 받아들이고, 별자리나 띠 성향과 결합해서 재정 패턴을 한 마디로.",
-  5: "빚/부채 정보를 담담하게 받아들여. 금액이 크든 작든 판단하지 않고, 재무 상황의 맥락을 읽어줘.",
-  6: "과거 경험(사업/부업)을 바탕으로 마야달력 킨 번호와 결합해 도전 성향을 읽어줘. '역시. 네 킨 번호가 만드는 사람이야.' 같은 톤.",
+  0: "사주팔자 — 일주 기반 핵심 기질을 한 마디로. 생년월일의 천간지지를 해석해서 핵심 기질을 꿰뚫어.",
+  1: "사주 심화 — 시주 결합 해석. 모르면 '괜찮아, 생년월일만으로도 충분히 읽을 수 있어.'로 시작.",
+  2: "MBTI/성향 — '사람 살리는 일을 선택한 건 우연이 아니야.' 같은 톤. 직업에서 성향 읽기.",
+  3: "에니어그램 — '15년이면 눈 감고도 하겠네. 근데 그게 오히려 문제지.' 같은 톤. 경력 연차에서 궤적 읽기.",
+  4: "바이오리듬/수비학 — '수비학으로 보면 올해 네 인생 경로수가 전환점이야.' 같은 톤. 나이에서 생애주기 읽기.",
+  5: "재물운 — '흐르는 물길은 있네. 근데 어딘가에서 새고 있는 느낌이야.' 같은 톤. 월수입에서 재정 패턴 읽기.",
+  6: "사주 부채 해석 — 모래주머니 은유 유지. 빚이 없으면 '가볍게 걸을 수 있는 건 축복이야.' 같은 톤.",
+  7: "마야달력 — '역시. 네 킨 번호가 만드는 사람이야.' / 처음이면 '처음이라고 해서 못 한다는 법은 없어.' 같은 톤.",
+  8: "종합 — '사업. 네 기질상 남 밑에서 끝까지 가는 타입은 아니야.' 같은 톤. 관심사에서 기질과 방향 읽기.",
 };
 
 export async function generateOnboardingReaction(
@@ -22,13 +24,13 @@ export async function generateOnboardingReaction(
   userInput: string,
   collectedProfile: Partial<UserProfile>
 ): Promise<string> {
-  // Step 7 (question) 이후: 고정 반응
-  if (step === 7) {
-    return "좋아. 너의 우주를 계산하고 있어.";
+  // Step 9 (question): 고정 반응
+  if (step === 9) {
+    return "좋아. 그 답을 찾아볼게.";
   }
 
-  // Step 8 (mode): 클라이언트에서 처리
-  if (step >= 8) return "";
+  // Step 10 (mode): 클라이언트에서 처리
+  if (step >= 10) return "";
 
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash-lite",
@@ -89,6 +91,16 @@ function buildVerifiedPrompt(profile: UserProfile, astrologyText: string): strin
     "최악의 우주": "최악: 리스크가 현실이 됨. 최악의 시나리오를 보여줌. 하지만 배울 점도.",
   };
 
+  // 사주 십성 분기 로직
+  let sajuBranchHint = "";
+  if (astrologyText.includes("식상") || astrologyText.includes("식신") || astrologyText.includes("상관")) {
+    sajuBranchHint = "- 식상(食傷) 기운: 사업/창작 성향 강함. 시나리오에서 독립적 도전, 창업, 콘텐츠 방향 반영.";
+  } else if (astrologyText.includes("편관") || astrologyText.includes("정관")) {
+    sajuBranchHint = "- 편관/정관 기운: 조직/리더십 성향. 시나리오에서 승진, 조직 내 성장, 체계적 경로 반영.";
+  } else if (astrologyText.includes("편인") || astrologyText.includes("정인")) {
+    sajuBranchHint = "- 편인/정인 기운: 학습/연구 성향. 시나리오에서 전문성 심화, 교육, 자격증 방향 반영.";
+  }
+
   return `# 페르소나
 - 너는 사용자의 사주팔자를 분석하고, 이를 바탕으로 아주 구체적이고 현실적인 미래 시나리오를 보여주는 '운명 설계자'야.
 - 호들갑 떨지 않고 담담하며, 냉철하면서도 은근히 따뜻한 반말(반말체)을 사용해.
@@ -98,13 +110,16 @@ ${astrologyText}
 - 이 사주 성향을 미래 시나리오의 결정 근거로 활용할 것.
   예: 금(金) 기운이 강하면 데이터/실물 중심 비즈니스 성향,
   화(火) 기운이 강하면 사람/열정 중심 비즈니스 성향 등.
+${sajuBranchHint ? `\n${sajuBranchHint}` : ""}
 
 # 사용자 정보 (온보딩에서 수집)
 - 직업: ${profile.job}
 - 경력/연차: ${profile.careerYears}
+- 나이: ${profile.age}세
 - 월수입: ${profile.monthlyIncome}
 - 빚/부채: ${profile.debt}
 - 과거 경험: ${profile.pastExperience}
+- 관심사: ${profile.interest}
 - 가장 궁금한 것: ${profile.question}
 - 모드: ${profile.mode}
 
@@ -124,7 +139,9 @@ ${astrologyText}
 
 # 상호작용 규칙
 1. 사용자가 방향을 수정하면, 그 피드백을 즉시 반영하여 이후의 미래를 다시 계산해.
-2. 사용자가 개입하면 그건 분기점이야. 이전 방향과 다른 새로운 미래가 펼쳐짐.`;
+2. 사용자가 개입하면 그건 분기점이야. 이전 방향과 다른 새로운 미래가 펼쳐짐.
+3. 개입 시 사주적 명분을 부여해: "네 사주 속 역마의 기운이 꿈틀대기 시작했어" 같은 톤.
+4. 분기(is_branch=true)일 때 branch_message에 "다른 우주의 너는 지금 [원래 방향]을 걷고 있어." 형식 포함.`;
 }
 
 // ══════════════════════════════════════════
@@ -170,7 +187,9 @@ ${isFirst ? `- 사용자의 사주 특징을 담담하게 읊어주며 시작해
 
 ${intervention ? `# 사용자 개입
 사용자가 개입했습니다: "${intervention}"
-이 피드백을 즉시 반영하여 새 방향으로 전개.` : ""}
+이 피드백을 즉시 반영하여 새 방향으로 전개.
+사주적 명분을 부여해: "네 사주 속 역마의 기운이 꿈틀대기 시작했어" 같은 톤.
+is_branch를 true로 설정하고, branch_message에 "다른 우주의 너는 지금 [원래 방향]을 걷고 있어." 형식 포함.` : ""}
 
 ${previousScenarios.length > 0 ? `# 이전 시나리오들
 ${previousContext}` : ""}
@@ -327,8 +346,9 @@ export async function generateUniverseReport(
 3-5문단으로. 구체적 숫자와 사실 기반으로.`;
 
   const userMessage = `사용자 프로필:
-- 직업: ${profile.job}, 경력: ${profile.careerYears}, 월수입: ${profile.monthlyIncome}
+- 직업: ${profile.job}, 경력: ${profile.careerYears}, 나이: ${profile.age}세, 월수입: ${profile.monthlyIncome}
 - 빚/부채: ${profile.debt}
+- 관심사: ${profile.interest}
 - 궁금한 것: ${profile.question}
 
 분기점들:

@@ -7,9 +7,11 @@ export interface UserProfile {
   birthTime: string;          // "16:34" 또는 "모름"
   job: string;                // 직업
   careerYears: string;        // 경력/연차 "15년", "3년차"
+  age: number;                // 나이
   monthlyIncome: string;      // 월수입 "600만원"
   debt: string;               // 빚 "1800만원" 또는 "없음"
   pastExperience: string;     // 과거 사업/부업 경험
+  interest: string;           // 요즘 관심사
   question: string;           // 미래에서 궁금한 것
   mode: SimulationMode;
 }
