@@ -59,15 +59,9 @@ function BranchChoicesComponent({ branchPoint, onChoice, disabled }: BranchChoic
               <button
                 key={i}
                 onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
                   if (!disabled && chosenIndex === undefined) {
-                    onChoice(c.label, i);
-                  }
-                }}
-                onTouchEnd={(e) => {
-                  if (!disabled && chosenIndex === undefined) {
-                    e.preventDefault();
-                    e.stopPropagation();
                     onChoice(c.label, i);
                   }
                 }}

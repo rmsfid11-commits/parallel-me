@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 
 interface MiniMapNode {
   id: string;
@@ -33,6 +33,7 @@ export default function MiniMap({ branchNodes, onTap }: MiniMapProps) {
   const nodesRef = useRef<MiniMapNode[]>([]);
   const prevCountRef = useRef(0);
   const pulseRef = useRef(0);
+  const [mapHeight, setMapHeight] = useState(70);
 
   // Layout nodes horizontally
   const layoutNodes = useCallback(() => {
@@ -66,7 +67,7 @@ export default function MiniMap({ branchNodes, onTap }: MiniMapProps) {
       visited.add(node.id);
 
       const x = col * 60 + 30;
-      const y = row * 28 + 40;
+      const y = row * 24 + 30;
 
       nodes.push({
         id: node.id,
@@ -125,6 +126,11 @@ export default function MiniMap({ branchNodes, onTap }: MiniMapProps) {
     const nodes = layoutNodes();
     nodesRef.current = nodes;
 
+    // Dynamic height based on max row
+    const maxY = nodes.length > 0 ? Math.max(...nodes.map((n) => n.y)) : 30;
+    const neededH = Math.min(140, Math.max(60, maxY + 25));
+    setMapHeight(neededH);
+
     // Build edges
     const edges: MiniMapEdge[] = [];
     for (const bn of branchNodes) {
@@ -140,9 +146,20 @@ export default function MiniMap({ branchNodes, onTap }: MiniMapProps) {
     const lastActive = activeNodes[activeNodes.length - 1];
     const canvasW = canvas.getBoundingClientRect().width;
 
+    let cachedW = canvas.getBoundingClientRect().width;
+    let cachedH = canvas.getBoundingClientRect().height;
+    const origResize = resize;
+    const resizeWithCache = () => {
+      origResize();
+      cachedW = canvas.getBoundingClientRect().width;
+      cachedH = canvas.getBoundingClientRect().height;
+    };
+    window.removeEventListener("resize", resize);
+    window.addEventListener("resize", resizeWithCache);
+
     const draw = () => {
-      const w = canvas.getBoundingClientRect().width;
-      const h = canvas.getBoundingClientRect().height;
+      const w = cachedW;
+      const h = cachedH;
       ctx.clearRect(0, 0, w, h);
 
       // Scroll offset: keep last active node near center-right
@@ -240,13 +257,8 @@ export default function MiniMap({ branchNodes, onTap }: MiniMapProps) {
 
     draw();
 
-    // Restart animation if pulse is active
-    if (pulseRef.current > 0) {
-      animRef.current = requestAnimationFrame(draw);
-    }
-
     return () => {
-      window.removeEventListener("resize", resize);
+      window.removeEventListener("resize", resizeWithCache);
       cancelAnimationFrame(animRef.current);
     };
   }, [branchNodes, layoutNodes]);
@@ -256,7 +268,8 @@ export default function MiniMap({ branchNodes, onTap }: MiniMapProps) {
       onClick={onTap}
       className="relative w-full cursor-pointer transition-all duration-300 hover:brightness-125"
       style={{
-        height: "80px",
+        height: `${mapHeight}px`,
+        transition: "height 0.3s ease",
         background: "rgba(0, 0, 0, 0.6)",
         borderBottom: "1px solid rgba(212, 168, 83, 0.1)",
       }}

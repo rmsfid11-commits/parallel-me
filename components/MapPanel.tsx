@@ -11,7 +11,6 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import ScenarioNode from "./ScenarioNode";
-import StarField from "./StarField";
 
 const nodeTypes = { scenario: ScenarioNode };
 
@@ -42,8 +41,6 @@ export default function MapPanel({
 
   return (
     <div className={containerClass} style={{ background: "#000" }}>
-      {isOverlay && <StarField />}
-
       {/* Top bar (only for overlay mode) */}
       {isOverlay && (
         <div
@@ -137,6 +134,18 @@ export default function MapPanel({
 
       {/* ReactFlow */}
       <div className="flex-1 relative">
+        {nodes.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center z-10">
+            <p
+              className="text-sm text-center px-4"
+              style={{ color: "rgba(255,255,255,0.25)" }}
+            >
+              아직 갈림길이 없어.
+              <br />
+              선택지를 골라보면 우주가 펼쳐질 거야.
+            </p>
+          </div>
+        )}
         <ReactFlow
           nodes={nodes}
           edges={edges}

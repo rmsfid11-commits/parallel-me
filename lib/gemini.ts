@@ -248,7 +248,19 @@ export async function generateChatResponse(
 
   const basePrompt = buildVerifiedPrompt(profile, astrologyText || "분석 데이터 없음");
 
-  const systemPrompt = `${basePrompt}
+  // AI 메모리: 핵심 결정들 요약
+  const decisions = messages
+    .filter(m => m.role === "assistant" && m.branchPoint?.chosenIndex !== undefined)
+    .map(m => {
+      const bp = m.branchPoint!;
+      const chosen = bp.choices[bp.chosenIndex!];
+      return `  - ${bp.timeLabel}: "${bp.summary}" → ${chosen.emoji} ${chosen.label}`;
+    });
+  const memorySection = decisions.length > 0
+    ? `\n# AI 메모리: 지금까지의 핵심 선택들\n${decisions.join("\n")}\n위 선택들의 맥락과 결과를 유지하며 이후 시나리오를 전개해.\n`
+    : "";
+
+  const systemPrompt = `${basePrompt}${memorySection}
 
 # 채팅 모드: 4카테고리 시나리오
 
@@ -289,7 +301,10 @@ export async function generateChatResponse(
 - 그 다음 [현재] 시점의 4카테고리 시나리오.
 - 첫 대화에서 분기점 하나 포함.`;
 
-  const contents = messages.map((m) => ({
+  // Cap messages to last 20 for context window management
+  const recentMessages = messages.length > 20 ? messages.slice(-20) : messages;
+
+  const contents = recentMessages.map((m) => ({
     role: m.role === "assistant" ? ("model" as const) : ("user" as const),
     parts: [{ text: m.content + (m.branchPoint ? `\n\n---BRANCH_POINT---\n${JSON.stringify(m.branchPoint)}` : "") }],
   }));
@@ -319,26 +334,28 @@ export async function generateChatResponse(
   const rawText = result.response.text();
   console.log("Gemini chat:", rawText.substring(0, 200));
 
-  const marker = "---BRANCH_POINT---";
-  const markerIdx = rawText.indexOf(marker);
-
+  // Robust branch point extraction
+  const markerIdx = rawText.indexOf("---BRANCH_POINT---");
   if (markerIdx === -1) {
     return { text: rawText.trim() };
   }
 
   const textPart = rawText.substring(0, markerIdx).trim();
-  const jsonPart = rawText.substring(markerIdx + marker.length).trim();
+  let jsonStr = rawText.substring(markerIdx + "---BRANCH_POINT---".length).trim();
+
+  // Strip markdown code fences if present
+  const fenceMatch = jsonStr.match(/^```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) jsonStr = fenceMatch[1].trim();
 
   try {
-    const branchPoint = JSON.parse(jsonPart) as BranchPointData;
-    if (!branchPoint.choices || branchPoint.choices.length < 2) {
-      return { text: rawText.trim() };
+    const branchPoint = JSON.parse(jsonStr) as BranchPointData;
+    if (branchPoint.choices && branchPoint.choices.length >= 2) {
+      return { text: textPart, branchPoint };
     }
-    return { text: textPart, branchPoint };
   } catch (e) {
-    console.error("Branch point parse error:", e);
-    return { text: rawText.trim() };
+    console.error("Branch point parse error:", e, jsonStr.substring(0, 100));
   }
+  return { text: textPart || rawText.trim() };
 }
 
 // ══════════════════════════════════════════

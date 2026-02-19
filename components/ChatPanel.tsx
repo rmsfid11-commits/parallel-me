@@ -22,20 +22,133 @@ export default function ChatPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-scroll to bottom
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages, isGenerating]);
+  // ── Typing animation ──
+  const [typingMsgId, setTypingMsgId] = useState<string | null>(null);
+  const [typingRevealed, setTypingRevealed] = useState(0);
+  const typingRef = useRef<{
+    msgId: string;
+    revealed: number;
+    total: number;
+  } | null>(null);
+  const prevMsgCountRef = useRef(0);
 
-  // Auto-resize textarea
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
-    // Auto-resize
-    e.target.style.height = "auto";
-    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+  // ── Scroll state ──
+  const isNearBottomRef = useRef(true);
+  const [hasUnread, setHasUnread] = useState(false);
+
+  // ── Mobile detect ──
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    setIsMobile(
+      /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+        window.innerWidth < 768
+    );
   }, []);
+
+  // ── Detect new assistant message → start typing ──
+  useEffect(() => {
+    if (messages.length > prevMsgCountRef.current) {
+      const lastMsg = messages[messages.length - 1];
+
+      if (lastMsg.role === "assistant") {
+        typingRef.current = {
+          msgId: lastMsg.id,
+          revealed: 0,
+          total: lastMsg.content.length,
+        };
+        setTypingMsgId(lastMsg.id);
+        setTypingRevealed(0);
+      }
+
+      // Scroll or show unread pill
+      if (isNearBottomRef.current) {
+        setTimeout(() => {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        }, 50);
+      } else {
+        setHasUnread(true);
+      }
+    }
+    prevMsgCountRef.current = messages.length;
+  }, [messages]);
+
+  // ── Typing animation loop ──
+  useEffect(() => {
+    if (!typingMsgId) return;
+
+    const CHARS_PER_TICK = 12;
+    const TICK_MS = 25;
+
+    const timer = setInterval(() => {
+      if (!typingRef.current) {
+        clearInterval(timer);
+        setTypingMsgId(null);
+        return;
+      }
+
+      typingRef.current.revealed = Math.min(
+        typingRef.current.revealed + CHARS_PER_TICK,
+        typingRef.current.total
+      );
+      setTypingRevealed(typingRef.current.revealed);
+
+      // Auto-scroll during typing if near bottom
+      if (isNearBottomRef.current && scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+
+      if (typingRef.current.revealed >= typingRef.current.total) {
+        typingRef.current = null;
+        clearInterval(timer);
+        setTimeout(() => setTypingMsgId(null), 100);
+      }
+    }, TICK_MS);
+
+    return () => clearInterval(timer);
+  }, [typingMsgId]);
+
+  // ── Scroll detection ──
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom =
+      el.scrollTop + el.clientHeight >= el.scrollHeight - 100;
+    isNearBottomRef.current = nearBottom;
+    if (nearBottom) setHasUnread(false);
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+    setHasUnread(false);
+  }, []);
+
+  // Auto-scroll when generating indicator appears
+  useEffect(() => {
+    if (isGenerating && isNearBottomRef.current) {
+      setTimeout(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      }, 50);
+    }
+  }, [isGenerating]);
+
+  // ── Input handling ──
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setInput(e.target.value);
+      e.target.style.height = "auto";
+      e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+    },
+    []
+  );
 
   const handleSend = useCallback(() => {
     const trimmed = input.trim();
@@ -45,6 +158,13 @@ export default function ChatPanel({
     if (inputRef.current) {
       inputRef.current.style.height = "auto";
     }
+    isNearBottomRef.current = true;
+    setHasUnread(false);
+    setTimeout(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+    }, 50);
   }, [input, isGenerating, onSendMessage]);
 
   const handleKeyDown = useCallback(
@@ -57,16 +177,29 @@ export default function ChatPanel({
     [handleSend]
   );
 
+  // ── Quick actions ──
+  const lastMsg =
+    messages.length > 0 ? messages[messages.length - 1] : null;
+  const showQuickActions =
+    lastMsg &&
+    lastMsg.role === "assistant" &&
+    !lastMsg.branchPoint &&
+    !isGenerating &&
+    !typingMsgId &&
+    messages.length > 1;
+
   return (
     <div
-      className="flex flex-col h-full"
+      className="flex flex-col h-full relative"
       style={{
-        background: "linear-gradient(to bottom, rgba(2,2,8,0.75) 0%, rgba(2,2,8,0.88) 30%, rgba(2,2,8,0.92) 100%)",
+        background:
+          "linear-gradient(to bottom, rgba(2,2,8,0.75) 0%, rgba(2,2,8,0.88) 30%, rgba(2,2,8,0.92) 100%)",
       }}
     >
       {/* Messages area */}
       <div
         ref={scrollRef}
+        onScroll={handleScroll}
         className="flex-1 overflow-y-auto px-3 md:px-4 py-4 space-y-3"
         style={{
           scrollbarWidth: "thin",
@@ -75,22 +208,63 @@ export default function ChatPanel({
       >
         {messages.map((msg) => (
           <div key={msg.id}>
-            <ChatMessage message={msg} />
-            {/* Branch choices after assistant message */}
-            {msg.role === "assistant" && msg.branchPoint && (
-              <div className="mt-2">
-                <BranchChoices
-                  branchPoint={msg.branchPoint}
-                  onChoice={(label, index) => onBranchChoice(msg.id, label, index)}
-                  disabled={isGenerating}
-                />
-              </div>
-            )}
+            <ChatMessage
+              message={msg}
+              typingReveal={
+                typingMsgId === msg.id ? typingRevealed : undefined
+              }
+            />
+            {/* Branch choices — hide while typing */}
+            {msg.role === "assistant" &&
+              msg.branchPoint &&
+              typingMsgId !== msg.id && (
+                <div className="mt-2">
+                  <BranchChoices
+                    branchPoint={msg.branchPoint}
+                    onChoice={(label, index) =>
+                      onBranchChoice(msg.id, label, index)
+                    }
+                    disabled={isGenerating}
+                  />
+                </div>
+              )}
           </div>
         ))}
 
-        {/* Typing indicator */}
-        {isGenerating && (
+        {/* Quick action chips */}
+        {showQuickActions && (
+          <div className="flex gap-2 px-1 animate-fadeIn">
+            {["계속", "더 자세히"].map((label) => (
+              <button
+                key={label}
+                onClick={() => onSendMessage(label)}
+                className="px-3.5 py-1.5 rounded-full text-[12px] transition-all duration-300"
+                style={{
+                  background: "rgba(212,168,83,0.08)",
+                  border: "1px solid rgba(212,168,83,0.2)",
+                  color: "rgba(212,168,83,0.7)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background =
+                    "rgba(212,168,83,0.15)";
+                  e.currentTarget.style.borderColor =
+                    "rgba(212,168,83,0.4)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background =
+                    "rgba(212,168,83,0.08)";
+                  e.currentTarget.style.borderColor =
+                    "rgba(212,168,83,0.2)";
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Typing indicator (only when waiting for API, not during reveal) */}
+        {isGenerating && !typingMsgId && (
           <div className="flex justify-start animate-fadeIn">
             <div
               className="rounded-2xl px-4 py-3 flex items-center gap-2"
@@ -103,21 +277,46 @@ export default function ChatPanel({
               <div className="flex gap-1">
                 <div
                   className="w-1.5 h-1.5 rounded-full animate-bounce"
-                  style={{ background: "rgba(212, 168, 83, 0.6)", animationDelay: "0ms" }}
+                  style={{
+                    background: "rgba(212, 168, 83, 0.6)",
+                    animationDelay: "0ms",
+                  }}
                 />
                 <div
                   className="w-1.5 h-1.5 rounded-full animate-bounce"
-                  style={{ background: "rgba(212, 168, 83, 0.6)", animationDelay: "150ms" }}
+                  style={{
+                    background: "rgba(212, 168, 83, 0.6)",
+                    animationDelay: "150ms",
+                  }}
                 />
                 <div
                   className="w-1.5 h-1.5 rounded-full animate-bounce"
-                  style={{ background: "rgba(212, 168, 83, 0.6)", animationDelay: "300ms" }}
+                  style={{
+                    background: "rgba(212, 168, 83, 0.6)",
+                    animationDelay: "300ms",
+                  }}
                 />
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* New message pill */}
+      {hasUnread && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-20 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full text-[11px] z-20 animate-slideUp"
+          style={{
+            background: "rgba(212,168,83,0.15)",
+            border: "1px solid rgba(212,168,83,0.4)",
+            color: "rgba(212,168,83,0.9)",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          새 메시지 ↓
+        </button>
+      )}
 
       {/* Input area */}
       <div
@@ -177,12 +376,14 @@ export default function ChatPanel({
             </svg>
           </button>
         </div>
-        <p
-          className="text-[10px] text-center mt-1.5"
-          style={{ color: "rgba(255,255,255,0.15)" }}
-        >
-          Shift+Enter로 줄바꿈
-        </p>
+        {!isMobile && (
+          <p
+            className="text-[10px] text-center mt-1.5"
+            style={{ color: "rgba(255,255,255,0.15)" }}
+          >
+            Shift+Enter로 줄바꿈
+          </p>
+        )}
       </div>
     </div>
   );

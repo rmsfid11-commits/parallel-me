@@ -5,6 +5,7 @@ import { ChatMessage as ChatMessageType } from "@/lib/types";
 
 interface ChatMessageProps {
   message: ChatMessageType;
+  typingReveal?: number;
 }
 
 // Time tag pattern: [6개월 후], [1년 후], [2주 후], [현재], etc.
@@ -92,7 +93,7 @@ function renderAssistantContent(content: string) {
   return elements;
 }
 
-function ChatMessageComponent({ message }: ChatMessageProps) {
+function ChatMessageComponent({ message, typingReveal }: ChatMessageProps) {
   const isUser = message.role === "user";
 
   if (isUser) {
@@ -120,7 +121,14 @@ function ChatMessageComponent({ message }: ChatMessageProps) {
     );
   }
 
-  // Assistant message with parsed content
+  // Assistant message with typing reveal
+  const displayContent =
+    typingReveal !== undefined
+      ? message.content.substring(0, typingReveal)
+      : message.content;
+  const isTyping =
+    typingReveal !== undefined && typingReveal < message.content.length;
+
   return (
     <div className="flex justify-start animate-fadeIn">
       <div
@@ -131,10 +139,27 @@ function ChatMessageComponent({ message }: ChatMessageProps) {
           borderRadius: "20px 20px 20px 4px",
         }}
       >
-        {renderAssistantContent(message.content)}
+        {renderAssistantContent(displayContent)}
+        {isTyping && (
+          <span
+            className="inline-block w-0.5 h-4 ml-0.5 animate-pulse"
+            style={{
+              background:
+                "linear-gradient(to bottom, #d4a853, rgba(179,136,255,0.5))",
+              verticalAlign: "text-bottom",
+              boxShadow: "0 0 8px rgba(212,168,83,0.6)",
+            }}
+          />
+        )}
       </div>
     </div>
   );
 }
 
-export default memo(ChatMessageComponent);
+export default memo(ChatMessageComponent, (prev, next) =>
+  prev.message.id === next.message.id &&
+  prev.message.content === next.message.content &&
+  prev.message.branchPoint?.chosenIndex ===
+    next.message.branchPoint?.chosenIndex &&
+  prev.typingReveal === next.typingReveal
+);

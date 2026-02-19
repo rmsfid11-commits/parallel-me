@@ -145,7 +145,9 @@ export default function OnboardingForm() {
   useEffect(() => {
     if (!restored) return;
 
-    history.pushState({ onboardingStep: step }, "");
+    if (phase === "input") {
+      history.pushState({ onboardingStep: step }, "");
+    }
 
     const handlePopState = (e: PopStateEvent) => {
       if (phase === "loading") return;
@@ -667,8 +669,24 @@ export default function OnboardingForm() {
           </div>
         )}
 
-        {/* AI Reaction — glowing text */}
-        {phase === "reacting" && (
+        {/* AI Reaction — loading dots then glowing text */}
+        {phase === "reacting" && !aiReaction && (
+          <div className="flex justify-center mt-8 animate-fadeIn">
+            <div className="flex gap-1.5">
+              {[0, 150, 300].map((delay) => (
+                <div
+                  key={delay}
+                  className="w-2 h-2 rounded-full animate-bounce"
+                  style={{
+                    background: "rgba(212,168,83,0.6)",
+                    animationDelay: `${delay}ms`,
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+        {phase === "reacting" && aiReaction && (
           <div className="flex justify-center mt-8 animate-fadeIn">
             <p
               className="text-center text-lg leading-relaxed max-w-sm animate-glowPulse"

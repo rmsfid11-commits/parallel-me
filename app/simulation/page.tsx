@@ -322,6 +322,7 @@ function SimulationCanvas() {
   const [soundMuted, setSoundMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForkEffect, setShowForkEffect] = useState(false);
+  const [startFailed, setStartFailed] = useState(false);
 
   const isGeneratingRef = useRef(false);
   isGeneratingRef.current = isGenerating;
@@ -415,7 +416,7 @@ function SimulationCanvas() {
           if (savedTl && savedTl.length > 0) {
             const session: SimulationSession = {
               id: crypto.randomUUID(),
-              name: `${p.mode} #1`,
+              name: `${p.mode} · ${new Date().toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}`,
               timelines: savedTl,
               activeTimelineId: savedAtl || savedTl[0].id,
               createdAt: Date.now(),
@@ -445,7 +446,7 @@ function SimulationCanvas() {
       };
       const session: SimulationSession = {
         id: crypto.randomUUID(),
-        name: `${p.mode} #1`,
+        name: `${p.mode} · ${new Date().toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}`,
         timelines: [tl],
         activeTimelineId: tl.id,
         createdAt: Date.now(),
@@ -544,6 +545,7 @@ function SimulationCanvas() {
   const handleSendMessage = useCallback(
     async (text: string) => {
       if (!profile || isGeneratingRef.current) return;
+      setError(null);
 
       const tlId = activeTimelineIdRef.current;
 
@@ -599,6 +601,7 @@ function SimulationCanvas() {
   const handleBranchChoice = useCallback(
     async (msgId: string, label: string, index: number) => {
       if (!profile || isGeneratingRef.current) return;
+      setError(null);
 
       const tlId = activeTimelineIdRef.current;
 
@@ -649,6 +652,52 @@ function SimulationCanvas() {
     [profile, getActiveMessages, updateTimelineMessages, callChatAPI]
   );
 
+  // ── Start chat (extracted for retry) ──
+  const startChat = useCallback(async () => {
+    if (isGeneratingRef.current) return;
+    setIsGenerating(true);
+    isGeneratingRef.current = true;
+    setStartFailed(false);
+    setError(null);
+    try {
+      const tlId = activeTimelineIdRef.current;
+      const startMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: "시작해줘",
+        timestamp: Date.now(),
+      };
+      updateTimelineMessages(tlId, (msgs) => [...msgs, startMsg]);
+
+      const result = await callChatAPI([startMsg]);
+      if (!result) return;
+
+      const aiMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: result.text,
+        timestamp: Date.now(),
+        branchPoint: result.branchPoint,
+      };
+      updateTimelineMessages(tlId, (msgs) => [...msgs, aiMsg]);
+
+      if (result.branchPoint) {
+        playBranchCreate();
+        setShowForkEffect(true);
+      } else {
+        playNodeCreate();
+      }
+    } catch (err) {
+      setStartFailed(true);
+      setError(
+        err instanceof Error ? err.message : "오류가 발생했습니다."
+      );
+    } finally {
+      setIsGenerating(false);
+      isGeneratingRef.current = false;
+    }
+  }, [updateTimelineMessages, callChatAPI]);
+
   // ── Auto-start first chat ──
   useEffect(() => {
     if (!profile || hasStartedRef.current) return;
@@ -659,52 +708,9 @@ function SimulationCanvas() {
       return;
     }
 
-    // Wait for timeline to be ready
     if (timelines.length === 0 || !activeTimelineId) return;
 
     hasStartedRef.current = true;
-
-    const startChat = async () => {
-      setIsGenerating(true);
-      isGeneratingRef.current = true;
-      try {
-        const tlId = activeTimelineIdRef.current;
-        const startMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: "user",
-          content: "시작해줘",
-          timestamp: Date.now(),
-        };
-        updateTimelineMessages(tlId, (msgs) => [...msgs, startMsg]);
-
-        const result = await callChatAPI([startMsg]);
-        if (!result) return;
-
-        const aiMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: result.text,
-          timestamp: Date.now(),
-          branchPoint: result.branchPoint,
-        };
-        updateTimelineMessages(tlId, (msgs) => [...msgs, aiMsg]);
-
-        if (result.branchPoint) {
-          playBranchCreate();
-          setShowForkEffect(true);
-        } else {
-          playNodeCreate();
-        }
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "오류가 발생했습니다."
-        );
-      } finally {
-        setIsGenerating(false);
-        isGeneratingRef.current = false;
-      }
-    };
-
     startChat();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile, timelines, activeTimelineId]);
@@ -1125,7 +1131,7 @@ function SimulationCanvas() {
     };
     const newSession: SimulationSession = {
       id: crypto.randomUUID(),
-      name: `${profile.mode} #${updatedSessions.length + 1}`,
+      name: `${profile.mode} · ${new Date().toLocaleDateString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`,
       timelines: [tl],
       activeTimelineId: tl.id,
       createdAt: Date.now(),
@@ -1318,16 +1324,29 @@ function SimulationCanvas() {
         onComplete={() => setShowForkEffect(false)}
       />
 
-      {/* Error toast */}
+      {/* Error toast with retry */}
       {error && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 bg-red-900/80 backdrop-blur-md border border-red-500/30 rounded-xl animate-slideUp">
           <p className="text-sm text-red-300">{error}</p>
-          <button
-            onClick={() => setError(null)}
-            className="text-xs text-red-400/70 hover:text-red-300 mt-1"
-          >
-            닫기
-          </button>
+          <div className="flex gap-3 mt-2">
+            {startFailed && (
+              <button
+                onClick={() => {
+                  hasStartedRef.current = false;
+                  startChat();
+                }}
+                className="text-xs text-amber-400/80 hover:text-amber-300 transition-colors"
+              >
+                다시 시도
+              </button>
+            )}
+            <button
+              onClick={() => setError(null)}
+              className="text-xs text-red-400/70 hover:text-red-300 transition-colors"
+            >
+              닫기
+            </button>
+          </div>
         </div>
       )}
 
