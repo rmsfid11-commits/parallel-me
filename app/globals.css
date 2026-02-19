@@ -243,3 +243,32 @@ input[type="number"]::-webkit-outer-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/* ═══════════════════════════════════════════
+   Branch Fork Animations
+   ═══════════════════════════════════════════ */
+
+@keyframes forkBurst {
+  0% { transform: scale(0); opacity: 0.8; }
+  50% { transform: scale(1.5); opacity: 0.4; }
+  100% { transform: scale(3); opacity: 0; }
+}
+
+@keyframes forkRing {
+  0% { transform: scale(0.3); opacity: 0.6; border-width: 3px; }
+  100% { transform: scale(2.5); opacity: 0; border-width: 1px; }
+}
+
+@keyframes branchSparkle {
+  0% { transform: translate(0,0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+}
+
+@keyframes edgeGrow {
+  0% { stroke-dashoffset: 200; opacity: 0; }
+  100% { stroke-dashoffset: 0; opacity: 1; }
+}
+
+.animate-forkBurst { animation: forkBurst 1s ease-out forwards; }
+.animate-forkRing { animation: forkRing 0.8s ease-out forwards; }
+.animate-branchSparkle { animation: branchSparkle 0.9s ease-out forwards; }

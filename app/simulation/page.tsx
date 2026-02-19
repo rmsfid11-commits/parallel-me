@@ -23,6 +23,9 @@ import MapPanel from "@/components/MapPanel";
 import MiniMap from "@/components/MiniMap";
 import StoryPanel from "@/components/StoryPanel";
 import StarField from "@/components/StarField";
+import ForkEffect from "@/components/ForkEffect";
+import ZoomSimulation from "@/components/ZoomSimulation";
+import { type ParallelNodeData } from "@/components/ParallelNode";
 import { getLayoutedElements } from "@/lib/layout";
 import {
   startAmbient,
@@ -196,6 +199,21 @@ function SimulationCanvas() {
   const [soundMuted, setSoundMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // View mode: scroll (default) or zoom
+  const [viewMode, setViewMode] = useState<"scroll" | "zoom">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("parallelme-viewmode") as "scroll" | "zoom") || "scroll";
+    }
+    return "scroll";
+  });
+
+  // Fork effect
+  const [showForkEffect, setShowForkEffect] = useState(false);
+
+  // Zoom mode nodes/edges (TB layout)
+  const [zoomNodes, setZoomNodes] = useState<Node[]>([]);
+  const [zoomEdges, setZoomEdges] = useState<Edge[]>([]);
+
   // First branch tracking
   const isFirstBranchRef = useRef(true);
 
@@ -290,6 +308,11 @@ function SimulationCanvas() {
       );
     }
   }, [timelines, activeTimelineId]);
+
+  // ── Persist viewMode ──
+  useEffect(() => {
+    localStorage.setItem("parallelme-viewmode", viewMode);
+  }, [viewMode]);
 
   // ── Swipe / beforeunload protection ──
   useEffect(() => {
@@ -400,8 +423,9 @@ function SimulationCanvas() {
 
         updateTimelineMessages(tlId, (msgs) => [...msgs, aiMsg]);
 
-        if (data.isBranch) {
+        if (data.isBranch || interventionText) {
           playBranchCreate();
+          setShowForkEffect(true);
         } else {
           playNodeCreate();
         }
@@ -710,6 +734,140 @@ function SimulationCanvas() {
       rebuildGraph(timelines, activeTimelineId);
   }, [timelines, activeTimelineId, rebuildGraph]);
 
+  // ── Build zoom-mode graph (TB layout with ParallelNode) ──
+  const rebuildZoomGraph = useCallback(
+    (currentTimelines: Timeline[], currentActiveId: string) => {
+      const branchNodes: {
+        id: string;
+        timeLabel: string;
+        summary: string;
+        choiceLabel?: string;
+        timelineId: string;
+        msgId: string;
+        parentNodeId?: string;
+        isOnActivePath: boolean;
+        isDimBranch: boolean;
+      }[] = [];
+      const edgeList: { source: string; target: string }[] = [];
+
+      for (const timeline of currentTimelines) {
+        const isActive = timeline.id === currentActiveId;
+        let prevBranchNodeId: string | undefined;
+
+        for (const msg of timeline.messages) {
+          if (msg.role === "assistant" && (msg.branchPoint || msg.timeLabel)) {
+            const nodeId = `z-${timeline.id}-${msg.id}`;
+            const summary = msg.branchPoint?.summary || msg.content.substring(0, 80) + "...";
+            const choiceLabel = msg.branchPoint?.chosenIndex !== undefined
+              ? msg.branchPoint.choices[msg.branchPoint.chosenIndex]?.label
+              : undefined;
+
+            branchNodes.push({
+              id: nodeId, timeLabel: msg.branchPoint?.timeLabel || msg.timeLabel || "",
+              summary, choiceLabel,
+              timelineId: timeline.id, msgId: msg.id,
+              parentNodeId: prevBranchNodeId,
+              isOnActivePath: isActive, isDimBranch: !isActive,
+            });
+
+            if (prevBranchNodeId) edgeList.push({ source: prevBranchNodeId, target: nodeId });
+            prevBranchNodeId = nodeId;
+
+            if (msg.branchPoint?.chosenIndex !== undefined) {
+              msg.branchPoint.choices.forEach((c, i) => {
+                if (i !== msg.branchPoint!.chosenIndex) {
+                  const hasChild = currentTimelines.some(
+                    (ct) => ct.branchPointMsgId === msg.id && ct.choiceIndex === i
+                  );
+                  if (!hasChild) {
+                    const dimId = `z-dim-${timeline.id}-${msg.id}-${i}`;
+                    branchNodes.push({
+                      id: dimId, timeLabel: msg.branchPoint!.timeLabel,
+                      summary: msg.branchPoint!.summary,
+                      choiceLabel: c.label,
+                      timelineId: timeline.id, msgId: msg.id,
+                      parentNodeId: nodeId,
+                      isOnActivePath: false, isDimBranch: true,
+                    });
+                    edgeList.push({ source: nodeId, target: dimId });
+                  }
+                }
+              });
+            }
+          }
+        }
+        if (timeline.parentTimelineId) {
+          const pNodeId = `z-${timeline.parentTimelineId}-${timeline.branchPointMsgId}`;
+          const first = branchNodes.find((bn) => bn.timelineId === timeline.id && !bn.parentNodeId);
+          if (first) edgeList.push({ source: pNodeId, target: first.id });
+        }
+      }
+
+      if (branchNodes.length === 0) {
+        setZoomNodes([]);
+        setZoomEdges([]);
+        return;
+      }
+
+      const flowNodes: Node[] = branchNodes.map((bn) => ({
+        id: bn.id,
+        type: "parallel",
+        position: { x: 0, y: 0 },
+        data: {
+          timeLabel: bn.timeLabel,
+          summary: bn.summary,
+          choiceLabel: bn.choiceLabel,
+          isOnActivePath: bn.isOnActivePath,
+          isDimBranch: bn.isDimBranch,
+          timelineId: bn.timelineId,
+          msgId: bn.msgId,
+          onRewind: () => {
+            if (bn.isDimBranch && bn.choiceLabel) {
+              const ptl = currentTimelines.find((t) => t.id === bn.timelineId);
+              const msg = ptl?.messages.find((m) => m.id === bn.msgId);
+              if (msg?.branchPoint) {
+                const ci = msg.branchPoint.choices.findIndex((c) => c.label === bn.choiceLabel);
+                if (ci >= 0) {
+                  setRewindModal({
+                    open: true, timelineId: bn.timelineId, msgId: bn.msgId,
+                    choiceIndex: ci, choiceLabel: bn.choiceLabel!,
+                  });
+                }
+              }
+            }
+          },
+        } satisfies ParallelNodeData,
+      }));
+
+      const flowEdges: Edge[] = edgeList.map((e) => {
+        const target = branchNodes.find((n) => n.id === e.target);
+        return {
+          id: `ze-${e.source}-${e.target}`,
+          source: e.source, sourceHandle: "source",
+          target: e.target, targetHandle: "target",
+          type: "default",
+          style: {
+            stroke: target?.isOnActivePath ? "rgba(212,168,83,0.6)" : "rgba(212,168,83,0.15)",
+            strokeWidth: target?.isOnActivePath ? 2.5 : 1.5,
+            strokeDasharray: target?.isDimBranch ? "6 4" : undefined,
+          },
+          animated: target?.isOnActivePath || false,
+        };
+      });
+
+      const { nodes: layouted, edges: layoutedEdges } = getLayoutedElements(flowNodes, flowEdges, "TB");
+      setZoomNodes(layouted);
+      setZoomEdges(layoutedEdges);
+    },
+    []
+  );
+
+  // Rebuild zoom graph when timelines change
+  useEffect(() => {
+    if (timelines.length > 0 && viewMode === "zoom")
+      rebuildZoomGraph(timelines, activeTimelineId);
+  }, [timelines, activeTimelineId, viewMode, rebuildZoomGraph]);
+
   // ── Rewind ──
   const handleRewind = useCallback(async () => {
     if (!profile || isGeneratingRef.current) return;
@@ -788,6 +946,7 @@ function SimulationCanvas() {
         )
       );
       playBranchCreate();
+      setShowForkEffect(true);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "오류가 발생했습니다."
@@ -933,6 +1092,25 @@ function SimulationCanvas() {
               </div>
             )}
 
+            {/* View mode toggle */}
+            <button
+              onClick={() => setViewMode(viewMode === "scroll" ? "zoom" : "scroll")}
+              className="px-2 py-1 rounded-lg text-[11px] transition-all duration-300"
+              style={{
+                background: viewMode === "zoom"
+                  ? "rgba(212,168,83,0.12)"
+                  : "rgba(0,0,0,0.5)",
+                border: viewMode === "zoom"
+                  ? "1px solid rgba(212,168,83,0.3)"
+                  : "1px solid rgba(255,255,255,0.06)",
+                color: viewMode === "zoom"
+                  ? "rgba(212,168,83,0.9)"
+                  : "rgba(255,255,255,0.3)",
+              }}
+            >
+              {viewMode === "zoom" ? "\u{1F4DC}" : "\u{1F52D}"}
+            </button>
+
             {/* Home */}
             <button
               onClick={() => router.push("/")}
@@ -949,185 +1127,210 @@ function SimulationCanvas() {
         </div>
       </div>
 
-      {/* Minimap strip */}
-      <div className="flex-none z-10 relative">
-        <MiniMap
-          branchNodes={branchNodesForMinimap}
-          onTap={() => {
-            setShowFullMap(true);
-            setTimeout(
-              () => fitView({ duration: 600, padding: 0.3 }),
-              100
-            );
-          }}
-        />
-      </div>
-
-      {/* Scroll reading area */}
-      <div className="flex-1 overflow-hidden z-10 relative">
-        <StoryPanel
-          messages={activeMessages}
-          isGenerating={isGenerating}
-        />
-      </div>
-
-      {/* Bottom bar — glass morphism */}
-      <div
-        className="flex-none z-20 glass-panel"
-        style={{
-          paddingBottom: "max(12px, env(safe-area-inset-bottom))",
-        }}
-      >
-        {/* Intervention input (slide-up above bottom bar) */}
-        {isIntervening && (
-          <div className="px-4 pt-3 pb-2 animate-slideUp">
-            <div
-              className="flex items-end gap-2 rounded-2xl px-3 py-2"
-              style={{
-                background: "rgba(10,10,30,0.6)",
-                backdropFilter: "blur(16px)",
-                border: "1px solid rgba(179,136,255,0.2)",
-                boxShadow: "0 0 20px rgba(179,136,255,0.06), inset 0 0 20px rgba(179,136,255,0.02)",
+      {/* ═══ Scroll Mode ═══ */}
+      {viewMode === "scroll" && (
+        <>
+          {/* Minimap strip */}
+          <div className="flex-none z-10 relative">
+            <MiniMap
+              branchNodes={branchNodesForMinimap}
+              onTap={() => {
+                setShowFullMap(true);
+                setTimeout(
+                  () => fitView({ duration: 600, padding: 0.3 }),
+                  100
+                );
               }}
-            >
-              <textarea
-                ref={interventionInputRef}
-                value={interventionText}
-                onChange={(e) => setInterventionText(e.target.value)}
-                placeholder="나는 여기서 이렇게 할 거야..."
-                rows={2}
-                className="flex-1 bg-transparent outline-none resize-none text-[14px] placeholder:text-white/20"
-                style={{
-                  color: "rgba(255,255,255,0.9)",
-                  caretColor: "#b388ff",
-                  lineHeight: "1.5",
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    if (interventionText.trim()) {
-                      handleIntervene(interventionText.trim());
-                    }
-                  }
-                }}
-              />
+            />
+          </div>
+
+          {/* Scroll reading area */}
+          <div className="flex-1 overflow-hidden z-10 relative">
+            <StoryPanel
+              messages={activeMessages}
+              isGenerating={isGenerating}
+            />
+          </div>
+
+          {/* Bottom bar — glass morphism */}
+          <div
+            className="flex-none z-20 glass-panel"
+            style={{
+              paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+            }}
+          >
+            {/* Intervention input (slide-up above bottom bar) */}
+            {isIntervening && (
+              <div className="px-4 pt-3 pb-2 animate-slideUp">
+                <div
+                  className="flex items-end gap-2 rounded-2xl px-3 py-2"
+                  style={{
+                    background: "rgba(10,10,30,0.6)",
+                    backdropFilter: "blur(16px)",
+                    border: "1px solid rgba(179,136,255,0.2)",
+                    boxShadow: "0 0 20px rgba(179,136,255,0.06), inset 0 0 20px rgba(179,136,255,0.02)",
+                  }}
+                >
+                  <textarea
+                    ref={interventionInputRef}
+                    value={interventionText}
+                    onChange={(e) => setInterventionText(e.target.value)}
+                    placeholder="나는 여기서 이렇게 할 거야..."
+                    rows={2}
+                    className="flex-1 bg-transparent outline-none resize-none text-[14px] placeholder:text-white/20"
+                    style={{
+                      color: "rgba(255,255,255,0.9)",
+                      caretColor: "#b388ff",
+                      lineHeight: "1.5",
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        if (interventionText.trim()) {
+                          handleIntervene(interventionText.trim());
+                        }
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      if (interventionText.trim()) {
+                        handleIntervene(interventionText.trim());
+                      }
+                    }}
+                    disabled={!interventionText.trim()}
+                    className="flex-none px-3 py-1.5 rounded-lg text-[12px] transition-all disabled:opacity-30"
+                    style={{
+                      background: "rgba(179,136,255,0.15)",
+                      border: "1px solid rgba(179,136,255,0.3)",
+                      color: "rgba(179,136,255,0.9)",
+                    }}
+                  >
+                    전송
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsIntervening(false);
+                      setInterventionText("");
+                    }}
+                    className="flex-none px-2 py-1.5 rounded-lg text-[12px] transition-all"
+                    style={{ color: "rgba(255,255,255,0.3)" }}
+                  >
+                    취소
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex items-center justify-center gap-3 px-4 py-3">
+              {!isPaused && !isIntervening && (
+                <button
+                  onClick={() => setIsPaused(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] transition-all"
+                  style={{
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    color: "rgba(255,255,255,0.5)",
+                  }}
+                >
+                  <span style={{ fontSize: "14px" }}>&#x23F8;&#xFE0E;</span>
+                  멈추기
+                </button>
+              )}
+
+              {!isIntervening && (
+                <button
+                  onClick={() => {
+                    setIsIntervening(true);
+                    setIsPaused(true);
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] transition-all"
+                  style={{
+                    background: "rgba(179,136,255,0.08)",
+                    border: "1px solid rgba(179,136,255,0.25)",
+                    color: "rgba(179,136,255,0.8)",
+                  }}
+                >
+                  <span style={{ fontSize: "14px" }}>&#x270D;&#xFE0E;</span>
+                  개입하기
+                </button>
+              )}
+
+              {isPaused && !isIntervening && (
+                <button
+                  onClick={() => setIsPaused(false)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] transition-all"
+                  style={{
+                    background: "rgba(212,168,83,0.1)",
+                    border: "1px solid rgba(212,168,83,0.3)",
+                    color: "rgba(212,168,83,0.9)",
+                  }}
+                >
+                  <span style={{ fontSize: "14px" }}>&#x25B6;&#xFE0E;</span>
+                  계속
+                </button>
+              )}
+
+              {/* Sound toggle — right side of bottom bar */}
               <button
                 onClick={() => {
-                  if (interventionText.trim()) {
-                    handleIntervene(interventionText.trim());
-                  }
+                  const n = !soundMuted;
+                  setSoundMuted(n);
+                  setMuted(n);
                 }}
-                disabled={!interventionText.trim()}
-                className="flex-none px-3 py-1.5 rounded-lg text-[12px] transition-all disabled:opacity-30"
+                className="ml-auto px-2 py-2 rounded-lg text-xs transition-all duration-300"
                 style={{
-                  background: "rgba(179,136,255,0.15)",
-                  border: "1px solid rgba(179,136,255,0.3)",
-                  color: "rgba(179,136,255,0.9)",
+                  background: "rgba(0,0,0,0.5)",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                  color: soundMuted
+                    ? "rgba(255,255,255,0.2)"
+                    : "rgba(212,168,83,0.6)",
                 }}
               >
-                전송
-              </button>
-              <button
-                onClick={() => {
-                  setIsIntervening(false);
-                  setInterventionText("");
-                }}
-                className="flex-none px-2 py-1.5 rounded-lg text-[12px] transition-all"
-                style={{ color: "rgba(255,255,255,0.3)" }}
-              >
-                취소
+                {soundMuted ? "\u{1F507}" : "\u{1F50A}"}
               </button>
             </div>
           </div>
-        )}
 
-        {/* Action buttons */}
-        <div className="flex items-center justify-center gap-3 px-4 py-3">
-          {!isPaused && !isIntervening && (
-            <button
-              onClick={() => setIsPaused(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] transition-all"
-              style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                color: "rgba(255,255,255,0.5)",
+          {/* Full map overlay (from minimap tap) */}
+          {showFullMap && (
+            <MapPanel
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onFitView={() => {
+                fitView({ duration: 800, padding: 0.2 });
+                playZoomOut();
               }}
-            >
-              <span style={{ fontSize: "14px" }}>&#x23F8;&#xFE0E;</span>
-              멈추기
-            </button>
+              onAnalyze={handleAnalyze}
+              onClose={() => setShowFullMap(false)}
+              isOverlay
+            />
           )}
-
-          {!isIntervening && (
-            <button
-              onClick={() => {
-                setIsIntervening(true);
-                setIsPaused(true);
-              }}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] transition-all"
-              style={{
-                background: "rgba(179,136,255,0.08)",
-                border: "1px solid rgba(179,136,255,0.25)",
-                color: "rgba(179,136,255,0.8)",
-              }}
-            >
-              <span style={{ fontSize: "14px" }}>&#x270D;&#xFE0E;</span>
-              개입하기
-            </button>
-          )}
-
-          {isPaused && !isIntervening && (
-            <button
-              onClick={() => setIsPaused(false)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] transition-all"
-              style={{
-                background: "rgba(212,168,83,0.1)",
-                border: "1px solid rgba(212,168,83,0.3)",
-                color: "rgba(212,168,83,0.9)",
-              }}
-            >
-              <span style={{ fontSize: "14px" }}>&#x25B6;&#xFE0E;</span>
-              계속
-            </button>
-          )}
-
-          {/* Sound toggle — right side of bottom bar */}
-          <button
-            onClick={() => {
-              const n = !soundMuted;
-              setSoundMuted(n);
-              setMuted(n);
-            }}
-            className="ml-auto px-2 py-2 rounded-lg text-xs transition-all duration-300"
-            style={{
-              background: "rgba(0,0,0,0.5)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              color: soundMuted
-                ? "rgba(255,255,255,0.2)"
-                : "rgba(212,168,83,0.6)",
-            }}
-          >
-            {soundMuted ? "\u{1F507}" : "\u{1F50A}"}
-          </button>
-        </div>
-      </div>
-
-      {/* Full map overlay (from minimap tap) */}
-      {showFullMap && (
-        <MapPanel
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onFitView={() => {
-            fitView({ duration: 800, padding: 0.2 });
-            playZoomOut();
-          }}
-          onAnalyze={handleAnalyze}
-          onClose={() => setShowFullMap(false)}
-          isOverlay
-        />
+        </>
       )}
+
+      {/* ═══ Zoom Mode ═══ */}
+      {viewMode === "zoom" && (
+        <div className="flex-1 z-10 relative overflow-hidden">
+          <ZoomSimulation
+            nodes={zoomNodes}
+            edges={zoomEdges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onSwitchToScroll={() => setViewMode("scroll")}
+            onAnalyze={handleAnalyze}
+          />
+        </div>
+      )}
+
+      {/* Fork effect overlay */}
+      <ForkEffect
+        active={showForkEffect}
+        onComplete={() => setShowForkEffect(false)}
+      />
 
       {/* Error toast */}
       {error && (

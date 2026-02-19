@@ -2,23 +2,33 @@
 
 import { useEffect, useRef } from "react";
 
+/* ═══════════════════════════════════════════
+   H-R Diagram Star Color Temperatures
+   ═══════════════════════════════════════════ */
+const STAR_COLORS = {
+  OB: { r: 155, g: 176, b: 255 },  // O/B type: blue-white (9000K+)
+  A:  { r: 202, g: 215, b: 255 },  // A type: white (7500K)
+  F:  { r: 248, g: 247, b: 255 },  // F type: pale yellow (6000K)
+  G:  { r: 255, g: 244, b: 234 },  // G type: yellow (5500K)
+  K:  { r: 255, g: 210, b: 161 },  // K type: orange (4000K)
+  M:  { r: 255, g: 187, b: 123 },  // M type: red (3000K)
+};
+
+type StarType = "tiny" | "small" | "medium" | "bright";
+
 interface Star {
   x: number; y: number;
   size: number;
   glowSize: number;
-  speed: number;
-  phase: number;
   r: number; g: number; b: number;
   hasFlare: boolean;
-}
-
-interface Mote {
-  x: number; y: number;
-  vx: number; vy: number;
-  size: number;
-  opacity: number;
-  phase: number;
-  isGold: boolean;
+  type: StarType;
+  // Scintillation params
+  fastFreq: number;
+  slowFreq: number;
+  phase1: number;
+  phase2: number;
+  phase3: number;  // for bright stars extra micro-twinkle
 }
 
 interface NebulaCloud {
@@ -31,88 +41,117 @@ interface NebulaCloud {
   breatheSpeed: number;
 }
 
+/* ── Pick color by type distribution ── */
+function pickColor(type: StarType): { r: number; g: number; b: number } {
+  const rand = Math.random();
+  if (type === "tiny" || type === "small") {
+    // 70% A/F
+    if (rand < 0.35) return STAR_COLORS.A;
+    if (rand < 0.70) return STAR_COLORS.F;
+    if (rand < 0.85) return STAR_COLORS.G;
+    return STAR_COLORS.K;
+  } else if (type === "medium") {
+    // 60% G/K
+    if (rand < 0.30) return STAR_COLORS.G;
+    if (rand < 0.60) return STAR_COLORS.K;
+    if (rand < 0.80) return STAR_COLORS.A;
+    return STAR_COLORS.F;
+  } else {
+    // bright: 40% O/B, 30% M, 30% gold/purple accent
+    if (rand < 0.40) return STAR_COLORS.OB;
+    if (rand < 0.70) return STAR_COLORS.M;
+    if (rand < 0.85) return { r: 212, g: 168, b: 83 }; // gold accent
+    return { r: 190, g: 170, b: 255 }; // purple accent
+  }
+}
+
+/* ── Milky Way band density check ── */
+function isInMilkyWay(x: number, y: number): boolean {
+  // Diagonal band from bottom-left to top-right
+  // Band equation: y = -x + 1 (center line), width ~0.3
+  const dist = Math.abs(y - (-x + 1)) / Math.SQRT2;
+  return dist < 0.18;
+}
+
 function createStars(): Star[] {
   const stars: Star[] = [];
 
-  // Tiny dust
-  for (let i = 0; i < 280; i++) {
-    stars.push({
-      x: Math.random(), y: Math.random(),
-      size: Math.random() * 0.7 + 0.3,
-      glowSize: 0,
-      speed: 0.3 + Math.random() * 0.5,
-      phase: Math.random() * Math.PI * 2,
-      r: 200 + Math.random() * 55,
-      g: 200 + Math.random() * 55,
-      b: 215 + Math.random() * 40,
-      hasFlare: false,
-    });
-  }
+  const addStar = (type: StarType) => {
+    let x = Math.random();
+    let y = Math.random();
 
-  // Medium stars with glow halo
-  for (let i = 0; i < 35; i++) {
-    stars.push({
-      x: Math.random(), y: Math.random(),
-      size: Math.random() * 1 + 0.8,
-      glowSize: 4 + Math.random() * 4,
-      speed: 0.2 + Math.random() * 0.4,
-      phase: Math.random() * Math.PI * 2,
-      r: 230 + Math.random() * 25,
-      g: 225 + Math.random() * 30,
-      b: 235 + Math.random() * 20,
-      hasFlare: false,
-    });
-  }
+    // Milky Way density boost: 50% chance to re-roll into the band
+    if (Math.random() < 0.35 && !isInMilkyWay(x, y)) {
+      // Place in milky way band region
+      const t = Math.random();
+      const centerX = t;
+      const centerY = -t + 1;
+      const offset = (Math.random() - 0.5) * 0.3;
+      x = centerX + offset * 0.7;
+      y = centerY + offset * 0.7;
+      x = Math.max(0, Math.min(1, x));
+      y = Math.max(0, Math.min(1, y));
+    }
 
-  // Bright accent stars with cross flare (gold/purple, 3-4px)
-  for (let i = 0; i < 20; i++) {
-    const isGold = Math.random() > 0.4;
+    const color = pickColor(type);
+    let size: number, glowSize: number, hasFlare: boolean;
+
+    switch (type) {
+      case "tiny":
+        size = 0.2 + Math.random() * 0.6;
+        glowSize = 0;
+        hasFlare = false;
+        break;
+      case "small":
+        size = 0.8 + Math.random() * 0.7;
+        glowSize = 1 + Math.random() * 2;
+        hasFlare = false;
+        break;
+      case "medium":
+        size = 1.5 + Math.random() * 1.0;
+        glowSize = 4 + Math.random() * 4;
+        hasFlare = false;
+        break;
+      case "bright":
+        size = 2 + Math.random() * 2;
+        glowSize = 8 + Math.random() * 10;
+        hasFlare = true;
+        break;
+    }
+
     stars.push({
-      x: Math.random(), y: Math.random(),
-      size: Math.random() * 1.5 + 2.0,
-      glowSize: 10 + Math.random() * 8,
-      speed: 0.15 + Math.random() * 0.25,
-      phase: Math.random() * Math.PI * 2,
-      r: isGold ? 212 : 190,
-      g: isGold ? 168 : 170,
-      b: isGold ? 83 : 255,
-      hasFlare: true,
+      x, y, size, glowSize,
+      r: color.r, g: color.g, b: color.b,
+      hasFlare, type,
+      fastFreq: 1.5 + Math.random() * 2.5,
+      slowFreq: 0.2 + Math.random() * 0.4,
+      phase1: Math.random() * Math.PI * 2,
+      phase2: Math.random() * Math.PI * 2,
+      phase3: Math.random() * Math.PI * 2,
     });
-  }
+  };
+
+  // Tiny dust: 1000
+  for (let i = 0; i < 1000; i++) addStar("tiny");
+  // Small: 300
+  for (let i = 0; i < 300; i++) addStar("small");
+  // Medium: 150
+  for (let i = 0; i < 150; i++) addStar("medium");
+  // Bright: 50
+  for (let i = 0; i < 50; i++) addStar("bright");
 
   return stars;
 }
 
-function createMotes(count: number): Mote[] {
-  const motes: Mote[] = [];
-  for (let i = 0; i < count; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const speed = 0.05 + Math.random() * 0.15;
-    motes.push({
-      x: Math.random(),
-      y: Math.random(),
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      size: 1 + Math.random() * 2,
-      opacity: 0.15 + Math.random() * 0.4,
-      phase: Math.random() * Math.PI * 2,
-      isGold: Math.random() > 0.3,
-    });
-  }
-  return motes;
-}
-
 function createNebulaClouds(): NebulaCloud[] {
   const clouds: NebulaCloud[] = [];
-
-  // Deep indigo/navy nebula patches
   const palette = [
-    { r: 30, g: 20, b: 80 },    // deep indigo
-    { r: 60, g: 30, b: 100 },   // purple nebula
-    { r: 20, g: 15, b: 60 },    // dark navy
-    { r: 80, g: 50, b: 30 },    // warm amber nebula
-    { r: 40, g: 20, b: 70 },    // violet
-    { r: 15, g: 25, b: 55 },    // deep blue
+    { r: 30, g: 20, b: 80 },
+    { r: 60, g: 30, b: 100 },
+    { r: 20, g: 15, b: 60 },
+    { r: 80, g: 50, b: 30 },
+    { r: 40, g: 20, b: 70 },
+    { r: 15, g: 25, b: 55 },
   ];
 
   for (let i = 0; i < 6; i++) {
@@ -123,9 +162,7 @@ function createNebulaClouds(): NebulaCloud[] {
       x: 0.1 + Math.random() * 0.8,
       y: 0.1 + Math.random() * 0.8,
       radius: 0.15 + Math.random() * 0.2,
-      r: color.r,
-      g: color.g,
-      b: color.b,
+      r: color.r, g: color.g, b: color.b,
       opacity: 0.06 + Math.random() * 0.08,
       driftX: Math.cos(angle) * driftSpeed,
       driftY: Math.sin(angle) * driftSpeed,
@@ -133,16 +170,20 @@ function createNebulaClouds(): NebulaCloud[] {
       breatheSpeed: 0.15 + Math.random() * 0.15,
     });
   }
-
   return clouds;
 }
 
+/* ═══════════════════════════════════════════
+   StarField Component
+   ═══════════════════════════════════════════ */
 export default function StarField() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const starsRef = useRef<Star[]>(createStars());
-  const motesRef = useRef<Mote[]>(createMotes(40));
   const nebulaRef = useRef<NebulaCloud[]>(createNebulaClouds());
   const rafRef = useRef<number>(0);
+  const offscreenRef = useRef<HTMLCanvasElement | null>(null);
+  const offscreenDirtyRef = useRef(true);
+  const lastOffscreenTimeRef = useRef(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -151,35 +192,98 @@ export default function StarField() {
     if (!ctx) return;
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let w = 0, h = 0;
+
+    // Create offscreen canvas for static stars
+    const offscreen = document.createElement("canvas");
+    offscreenRef.current = offscreen;
+    const offCtx = offscreen.getContext("2d")!;
 
     const resize = () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
+      w = window.innerWidth;
+      h = window.innerHeight;
       canvas.width = w * dpr;
       canvas.height = h * dpr;
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      offscreen.width = w * dpr;
+      offscreen.height = h * dpr;
+      offCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      offscreenDirtyRef.current = true;
     };
     resize();
     window.addEventListener("resize", resize);
 
     const stars = starsRef.current;
-    const motes = motesRef.current;
     const nebulae = nebulaRef.current;
 
+    // Separate stars by render tier
+    const staticStars = stars.filter(s => s.type === "tiny" || s.type === "small");
+    const dynamicStars = stars.filter(s => s.type === "medium" || s.type === "bright");
+
+    /* ── Draw static stars onto offscreen canvas ── */
+    const renderOffscreen = (t: number) => {
+      offCtx.clearRect(0, 0, w, h);
+
+      // Milky Way diffuse glow band
+      const grad = offCtx.createLinearGradient(0, h, w, 0);
+      grad.addColorStop(0, "transparent");
+      grad.addColorStop(0.3, "rgba(180, 190, 255, 0.025)");
+      grad.addColorStop(0.45, "rgba(200, 200, 255, 0.045)");
+      grad.addColorStop(0.55, "rgba(200, 200, 255, 0.045)");
+      grad.addColorStop(0.7, "rgba(180, 190, 255, 0.025)");
+      grad.addColorStop(1, "transparent");
+      offCtx.fillStyle = grad;
+      offCtx.fillRect(0, 0, w, h);
+
+      // Second, narrower milky way core
+      const grad2 = offCtx.createLinearGradient(0, h, w, 0);
+      grad2.addColorStop(0, "transparent");
+      grad2.addColorStop(0.4, "rgba(220, 210, 255, 0.015)");
+      grad2.addColorStop(0.48, "rgba(240, 230, 255, 0.035)");
+      grad2.addColorStop(0.52, "rgba(240, 230, 255, 0.035)");
+      grad2.addColorStop(0.6, "rgba(220, 210, 255, 0.015)");
+      grad2.addColorStop(1, "transparent");
+      offCtx.fillStyle = grad2;
+      offCtx.fillRect(0, 0, w, h);
+
+      for (const s of staticStars) {
+        // Slow scintillation for static layer (updated every ~1s)
+        const twinkle = Math.sin(t * s.slowFreq + s.phase2) * 0.25 + 0.75;
+        const alpha = twinkle;
+        const sx = s.x * w;
+        const sy = s.y * h;
+
+        // Small glow for "small" type
+        if (s.glowSize > 0) {
+          const gRad = s.glowSize;
+          const glow = offCtx.createRadialGradient(sx, sy, 0, sx, sy, gRad);
+          glow.addColorStop(0, `rgba(${s.r},${s.g},${s.b},${alpha * 0.12})`);
+          glow.addColorStop(1, "transparent");
+          offCtx.fillStyle = glow;
+          offCtx.fillRect(sx - gRad, sy - gRad, gRad * 2, gRad * 2);
+        }
+
+        // Star dot
+        offCtx.beginPath();
+        offCtx.arc(sx, sy, s.size, 0, Math.PI * 2);
+        offCtx.fillStyle = `rgba(${s.r},${s.g},${s.b},${alpha})`;
+        offCtx.fill();
+      }
+    };
+
+    /* ── Main render loop ── */
     const draw = (time: number) => {
       const t = time * 0.001;
-      const w = canvas.width / dpr;
-      const h = canvas.height / dpr;
+
       ctx.clearRect(0, 0, w, h);
 
-      // ── Nebula clouds (drawn first, behind everything) ──
+      // ── Nebula clouds (behind everything) ──
       for (const cloud of nebulae) {
-        // Slow drift
         cloud.x += cloud.driftX / w;
         cloud.y += cloud.driftY / h;
-        // Wrap around softly
         if (cloud.x < -0.3) cloud.x = 1.3;
         if (cloud.x > 1.3) cloud.x = -0.3;
         if (cloud.y < -0.3) cloud.y = 1.3;
@@ -191,41 +295,58 @@ export default function StarField() {
         const cy = cloud.y * h;
         const r = cloud.radius * Math.max(w, h);
 
-        // Color shift over time
         const colorShift = Math.sin(t * 0.05 + cloud.phase) * 0.5 + 0.5;
         const nr = cloud.r + colorShift * 15;
         const ng = cloud.g + colorShift * 10;
         const nb = cloud.b + colorShift * 20;
 
         const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-        grad.addColorStop(0, `rgba(${nr}, ${ng}, ${nb}, ${alpha})`);
-        grad.addColorStop(0.4, `rgba(${nr}, ${ng}, ${nb}, ${alpha * 0.5})`);
+        grad.addColorStop(0, `rgba(${nr},${ng},${nb},${alpha})`);
+        grad.addColorStop(0.4, `rgba(${nr},${ng},${nb},${alpha * 0.5})`);
         grad.addColorStop(1, "transparent");
         ctx.fillStyle = grad;
         ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
       }
 
-      // ── Stars ──
-      for (const s of stars) {
-        const twinkle = Math.sin(t * s.speed * 2 + s.phase) * 0.35 + 0.65;
-        const alpha = twinkle;
+      // ── Offscreen static layer (re-render every ~1.5s) ──
+      if (offscreenDirtyRef.current || t - lastOffscreenTimeRef.current > 1.5) {
+        renderOffscreen(t);
+        lastOffscreenTimeRef.current = t;
+        offscreenDirtyRef.current = false;
+      }
+      ctx.drawImage(offscreen, 0, 0, w * dpr, h * dpr, 0, 0, w, h);
+
+      // ── Dynamic stars (medium + bright) — real-time render ──
+      for (const s of dynamicStars) {
+        // Dual-frequency scintillation
+        const fast = Math.sin(t * s.fastFreq + s.phase1) * 0.15;
+        const slow = Math.sin(t * s.slowFreq + s.phase2) * 0.25;
+        let twinkle = fast + slow + 0.6;
+
+        // Bright stars: extra micro-twinkle
+        if (s.type === "bright") {
+          twinkle += Math.sin(t * 6 + s.phase3) * 0.08;
+        }
+        twinkle = Math.max(0.15, Math.min(1, twinkle));
+
         const sx = s.x * w;
         const sy = s.y * h;
 
         // Glow halo
         if (s.glowSize > 0) {
-          const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, s.glowSize);
-          glow.addColorStop(0, `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha * 0.15})`);
-          glow.addColorStop(0.5, `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha * 0.05})`);
+          const gs = s.glowSize * (0.8 + twinkle * 0.2);
+          const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, gs);
+          glow.addColorStop(0, `rgba(${s.r},${s.g},${s.b},${twinkle * 0.15})`);
+          glow.addColorStop(0.5, `rgba(${s.r},${s.g},${s.b},${twinkle * 0.05})`);
           glow.addColorStop(1, "transparent");
           ctx.fillStyle = glow;
-          ctx.fillRect(sx - s.glowSize, sy - s.glowSize, s.glowSize * 2, s.glowSize * 2);
+          ctx.fillRect(sx - gs, sy - gs, gs * 2, gs * 2);
         }
 
-        // Cross flare
+        // Cross flare for bright stars
         if (s.hasFlare) {
           const flareLen = s.size * 6 * twinkle;
-          ctx.strokeStyle = `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha * 0.18})`;
+          ctx.strokeStyle = `rgba(${s.r},${s.g},${s.b},${twinkle * 0.18})`;
           ctx.lineWidth = 0.5;
           ctx.beginPath();
           ctx.moveTo(sx - flareLen, sy);
@@ -236,9 +357,9 @@ export default function StarField() {
           ctx.lineTo(sx, sy + flareLen);
           ctx.stroke();
 
-          // Diagonal flares for extra sparkle
+          // Diagonal flares
           const diagLen = flareLen * 0.5;
-          ctx.strokeStyle = `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha * 0.08})`;
+          ctx.strokeStyle = `rgba(${s.r},${s.g},${s.b},${twinkle * 0.08})`;
           ctx.beginPath();
           ctx.moveTo(sx - diagLen, sy - diagLen);
           ctx.lineTo(sx + diagLen, sy + diagLen);
@@ -252,50 +373,9 @@ export default function StarField() {
         // Star dot
         ctx.beginPath();
         ctx.arc(sx, sy, s.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha})`;
+        ctx.fillStyle = `rgba(${s.r},${s.g},${s.b},${twinkle})`;
         ctx.fill();
       }
-
-      // ── Floating motes (light particles drifting) ──
-      ctx.globalCompositeOperation = "lighter";
-
-      for (const m of motes) {
-        // Drift
-        m.x += m.vx / w;
-        m.y += m.vy / h;
-
-        // Wrap around
-        if (m.x < -0.02) m.x = 1.02;
-        if (m.x > 1.02) m.x = -0.02;
-        if (m.y < -0.02) m.y = 1.02;
-        if (m.y > 1.02) m.y = -0.02;
-
-        const mx = m.x * w;
-        const my = m.y * h;
-        const breathe = Math.sin(t * 0.5 + m.phase) * 0.3 + 0.7;
-        const alpha = m.opacity * breathe;
-
-        const r = m.isGold ? 255 : 200;
-        const g = m.isGold ? 220 : 170;
-        const b = m.isGold ? 150 : 255;
-
-        // Soft glow
-        const glowR = m.size * 6;
-        const glow = ctx.createRadialGradient(mx, my, 0, mx, my, glowR);
-        glow.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${alpha * 0.3})`);
-        glow.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${alpha * 0.08})`);
-        glow.addColorStop(1, "transparent");
-        ctx.fillStyle = glow;
-        ctx.fillRect(mx - glowR, my - glowR, glowR * 2, glowR * 2);
-
-        // Dot
-        ctx.beginPath();
-        ctx.arc(mx, my, m.size * 0.4, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha * 0.7})`;
-        ctx.fill();
-      }
-
-      ctx.globalCompositeOperation = "source-over";
 
       rafRef.current = requestAnimationFrame(draw);
     };
