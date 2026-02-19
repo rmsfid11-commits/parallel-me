@@ -62,3 +62,13 @@ export interface Timeline {
   choiceIndex: number;
   messages: ChatMessage[];
 }
+
+// ── 시뮬레이션 세션 ──
+export interface SimulationSession {
+  id: string;
+  name: string;
+  timelines: Timeline[];
+  activeTimelineId: string;
+  createdAt: number;
+  msgCount: number;
+}

@@ -312,6 +312,13 @@ input[type="number"] {
     0 -8px 6px -4px rgba(212, 168, 83, 0.2);
 }
 
+/* Session drawer slide */
+@keyframes slideLeft {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.animate-slideLeft { animation: slideLeft 0.3s ease-out; }
+
 .star-large-purple {
   will-change: opacity, transform;
   animation: twinkle-large var(--tw-dur, 3s) ease-in-out infinite;

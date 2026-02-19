@@ -58,14 +58,24 @@ function BranchChoicesComponent({ branchPoint, onChoice, disabled }: BranchChoic
             return (
               <button
                 key={i}
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   if (!disabled && chosenIndex === undefined) {
+                    onChoice(c.label, i);
+                  }
+                }}
+                onTouchEnd={(e) => {
+                  if (!disabled && chosenIndex === undefined) {
+                    e.preventDefault();
+                    e.stopPropagation();
                     onChoice(c.label, i);
                   }
                 }}
                 disabled={disabled || chosenIndex !== undefined}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] transition-all duration-300 text-left"
                 style={{
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
                   background: isChosen
                     ? "rgba(212, 168, 83, 0.15)"
                     : "rgba(0, 0, 0, 0.4)",

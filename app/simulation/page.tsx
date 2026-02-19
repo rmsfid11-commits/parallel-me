@@ -16,6 +16,7 @@ import {
   UserProfile,
   ChatMessage,
   Timeline,
+  SimulationSession,
 } from "@/lib/types";
 import { type ScenarioNodeData } from "@/components/ScenarioNode";
 import MapPanel from "@/components/MapPanel";
@@ -156,6 +157,142 @@ function ReportModal({
   );
 }
 
+// ── Session Drawer ──
+function SessionDrawer({
+  isOpen,
+  sessions,
+  activeSessionId,
+  onSelectSession,
+  onNewSession,
+  onDeleteSession,
+  onClose,
+}: {
+  isOpen: boolean;
+  sessions: SimulationSession[];
+  activeSessionId: string;
+  onSelectSession: (id: string) => void;
+  onNewSession: () => void;
+  onDeleteSession: (id: string) => void;
+  onClose: () => void;
+}) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fadeIn"
+        onClick={onClose}
+      />
+      <div
+        className="relative ml-auto w-72 h-full flex flex-col animate-slideLeft"
+        style={{
+          background: "rgba(8, 8, 25, 0.95)",
+          borderLeft: "1px solid rgba(212,168,83,0.15)",
+          backdropFilter: "blur(24px)",
+        }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-4 py-3"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+        >
+          <h2 className="text-sm font-bold text-white/80">
+            내 시뮬레이션
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-white/30 hover:text-white/60 text-lg transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* New session button */}
+        <button
+          onClick={onNewSession}
+          className="mx-3 mt-3 mb-2 py-2.5 rounded-xl text-[13px] font-semibold transition-all hover:opacity-80"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(179,136,255,0.15), rgba(212,168,83,0.15))",
+            border: "1px solid rgba(212,168,83,0.3)",
+            color: "rgba(212,168,83,0.9)",
+          }}
+        >
+          + 새로 시작
+        </button>
+
+        {/* Session list */}
+        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
+          {sessions
+            .slice()
+            .sort((a, b) => b.createdAt - a.createdAt)
+            .map((s) => {
+              const isActive = s.id === activeSessionId;
+              return (
+                <div
+                  key={s.id}
+                  className="relative group rounded-xl transition-all"
+                  style={{
+                    background: isActive
+                      ? "rgba(212,168,83,0.1)"
+                      : "rgba(255,255,255,0.03)",
+                    border: isActive
+                      ? "1px solid rgba(212,168,83,0.3)"
+                      : "1px solid rgba(255,255,255,0.05)",
+                  }}
+                >
+                  <button
+                    onClick={() => onSelectSession(s.id)}
+                    className="w-full text-left px-3 py-2.5"
+                  >
+                    <p
+                      className="text-[13px] font-medium"
+                      style={{
+                        color: isActive
+                          ? "rgba(212,168,83,0.9)"
+                          : "rgba(255,255,255,0.7)",
+                      }}
+                    >
+                      {s.name}
+                    </p>
+                    <p
+                      className="text-[11px] mt-0.5"
+                      style={{ color: "rgba(255,255,255,0.3)" }}
+                    >
+                      {new Date(s.createdAt).toLocaleDateString("ko-KR", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}{" "}
+                      · {s.msgCount}개 메시지
+                    </p>
+                  </button>
+                  {/* Delete (only non-active, and more than 1 session) */}
+                  {!isActive && sessions.length > 1 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteSession(s.id);
+                      }}
+                      className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      style={{
+                        background: "rgba(255,80,80,0.15)",
+                        color: "rgba(255,80,80,0.7)",
+                        fontSize: "11px",
+                      }}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════
 // ── Main Simulation (Chat Mode)
 // ══════════════════════════════════════════
@@ -173,6 +310,11 @@ function SimulationCanvas() {
   const activeTimelineIdRef = useRef("");
   timelinesRef.current = timelines;
   activeTimelineIdRef.current = activeTimelineId;
+
+  // Sessions
+  const [sessions, setSessions] = useState<SimulationSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string>("");
+  const [showSessionDrawer, setShowSessionDrawer] = useState(false);
 
   // UI state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -224,7 +366,7 @@ function SimulationCanvas() {
     };
   }, []);
 
-  // ── Load profile ──
+  // ── Load profile + sessions ──
   useEffect(() => {
     const stored = localStorage.getItem("parallelme-profile");
     if (!stored) {
@@ -235,21 +377,65 @@ function SimulationCanvas() {
       const p = JSON.parse(stored) as UserProfile;
       setProfile(p);
 
-      // Restore from localStorage
-      const savedSim = localStorage.getItem("parallelme-simulation");
-      if (savedSim) {
+      // 1) Try loading sessions
+      const savedSessions = localStorage.getItem("parallelme-sessions");
+      if (savedSessions) {
         try {
-          const { timelines: savedTl, activeTimelineId: savedAtl } = JSON.parse(savedSim);
-          if (savedTl && savedTl.length > 0) {
-            setTimelines(savedTl);
-            setActiveTimelineId(savedAtl || savedTl[0].id);
+          const parsed = JSON.parse(savedSessions) as {
+            sessions: SimulationSession[];
+            activeSessionId: string;
+          };
+          if (parsed.sessions && parsed.sessions.length > 0) {
+            setSessions(parsed.sessions);
+            const activeId =
+              parsed.activeSessionId || parsed.sessions[0].id;
+            setActiveSessionId(activeId);
+            const active =
+              parsed.sessions.find((s) => s.id === activeId) ||
+              parsed.sessions[0];
+            setTimelines(active.timelines);
+            setActiveTimelineId(
+              active.activeTimelineId || active.timelines[0]?.id || ""
+            );
             return;
           }
         } catch {
-          // ignore, create fresh
+          // ignore, fall through
         }
       }
 
+      // 2) Legacy migration: parallelme-simulation → session
+      const savedSim = localStorage.getItem("parallelme-simulation");
+      if (savedSim) {
+        try {
+          const {
+            timelines: savedTl,
+            activeTimelineId: savedAtl,
+          } = JSON.parse(savedSim);
+          if (savedTl && savedTl.length > 0) {
+            const session: SimulationSession = {
+              id: crypto.randomUUID(),
+              name: `${p.mode} #1`,
+              timelines: savedTl,
+              activeTimelineId: savedAtl || savedTl[0].id,
+              createdAt: Date.now(),
+              msgCount: (savedTl as Timeline[]).flatMap(
+                (t) => t.messages
+              ).length,
+            };
+            setSessions([session]);
+            setActiveSessionId(session.id);
+            setTimelines(savedTl);
+            setActiveTimelineId(savedAtl || savedTl[0].id);
+            localStorage.removeItem("parallelme-simulation");
+            return;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // 3) Fresh start
       const tl: Timeline = {
         id: crypto.randomUUID(),
         parentTimelineId: null,
@@ -257,6 +443,16 @@ function SimulationCanvas() {
         choiceIndex: -1,
         messages: [],
       };
+      const session: SimulationSession = {
+        id: crypto.randomUUID(),
+        name: `${p.mode} #1`,
+        timelines: [tl],
+        activeTimelineId: tl.id,
+        createdAt: Date.now(),
+        msgCount: 0,
+      };
+      setSessions([session]);
+      setActiveSessionId(session.id);
       setTimelines([tl]);
       setActiveTimelineId(tl.id);
     } catch {
@@ -264,15 +460,25 @@ function SimulationCanvas() {
     }
   }, [router]);
 
-  // ── Persist simulation ──
+  // ── Persist sessions ──
   useEffect(() => {
-    if (timelines.length > 0 && activeTimelineId) {
+    if (sessions.length > 0 && activeSessionId && timelines.length > 0) {
+      const updatedSessions = sessions.map((s) =>
+        s.id === activeSessionId
+          ? {
+              ...s,
+              timelines,
+              activeTimelineId,
+              msgCount: timelines.flatMap((t) => t.messages).length,
+            }
+          : s
+      );
       localStorage.setItem(
-        "parallelme-simulation",
-        JSON.stringify({ timelines, activeTimelineId })
+        "parallelme-sessions",
+        JSON.stringify({ sessions: updatedSessions, activeSessionId })
       );
     }
-  }, [timelines, activeTimelineId]);
+  }, [timelines, activeTimelineId, sessions, activeSessionId]);
 
   // ── beforeunload protection ──
   useEffect(() => {
@@ -858,6 +1064,90 @@ function SimulationCanvas() {
     }
   }, [profile]);
 
+  // ── Session management ──
+  const handleSwitchSession = useCallback(
+    (sessionId: string) => {
+      if (sessionId === activeSessionId) {
+        setShowSessionDrawer(false);
+        return;
+      }
+
+      // Save current working copy back to sessions
+      const updatedSessions = sessions.map((s) =>
+        s.id === activeSessionId
+          ? {
+              ...s,
+              timelines,
+              activeTimelineId,
+              msgCount: timelines.flatMap((t) => t.messages).length,
+            }
+          : s
+      );
+
+      const target = updatedSessions.find((s) => s.id === sessionId);
+      if (!target) return;
+
+      setSessions(updatedSessions);
+      setActiveSessionId(sessionId);
+      setTimelines(target.timelines);
+      setActiveTimelineId(
+        target.activeTimelineId || target.timelines[0]?.id || ""
+      );
+      hasStartedRef.current = target.timelines.some(
+        (t) => t.messages.length > 0
+      );
+      setShowSessionDrawer(false);
+    },
+    [activeSessionId, sessions, timelines, activeTimelineId]
+  );
+
+  const handleNewSession = useCallback(() => {
+    if (!profile) return;
+
+    // Save current session
+    const updatedSessions = sessions.map((s) =>
+      s.id === activeSessionId
+        ? {
+            ...s,
+            timelines,
+            activeTimelineId,
+            msgCount: timelines.flatMap((t) => t.messages).length,
+          }
+        : s
+    );
+
+    const tl: Timeline = {
+      id: crypto.randomUUID(),
+      parentTimelineId: null,
+      branchPointMsgId: "",
+      choiceIndex: -1,
+      messages: [],
+    };
+    const newSession: SimulationSession = {
+      id: crypto.randomUUID(),
+      name: `${profile.mode} #${updatedSessions.length + 1}`,
+      timelines: [tl],
+      activeTimelineId: tl.id,
+      createdAt: Date.now(),
+      msgCount: 0,
+    };
+
+    setSessions([...updatedSessions, newSession]);
+    setActiveSessionId(newSession.id);
+    setTimelines([tl]);
+    setActiveTimelineId(tl.id);
+    hasStartedRef.current = false;
+    setShowSessionDrawer(false);
+  }, [profile, activeSessionId, sessions, timelines, activeTimelineId]);
+
+  const handleDeleteSession = useCallback(
+    (sessionId: string) => {
+      if (sessionId === activeSessionId || sessions.length <= 1) return;
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    },
+    [activeSessionId, sessions.length]
+  );
+
   // Loading
   if (!profile) {
     return (
@@ -876,7 +1166,7 @@ function SimulationCanvas() {
   return (
     <div
       className="w-screen h-screen flex flex-col"
-      style={{ background: "#000", touchAction: "pan-y" }}
+      style={{ background: "#000" }}
     >
       {/* StarField */}
       <div className="fixed inset-0 z-0 pointer-events-none">
@@ -930,6 +1220,21 @@ function SimulationCanvas() {
                 ))}
               </div>
             )}
+
+            {/* Sessions drawer toggle */}
+            <button
+              onClick={() => setShowSessionDrawer(true)}
+              className="px-2 py-1 rounded-lg text-[11px] transition-all duration-300"
+              style={{
+                background: "rgba(0,0,0,0.5)",
+                border: "1px solid rgba(179,136,255,0.15)",
+                color: "rgba(179,136,255,0.6)",
+              }}
+            >
+              {sessions.length > 1
+                ? `${sessions.length}개 세션`
+                : "세션"}
+            </button>
 
             {/* Sound toggle */}
             <button
@@ -1045,6 +1350,17 @@ function SimulationCanvas() {
         report={reportText}
         isLoading={reportLoading}
         onClose={() => setReportModal(false)}
+      />
+
+      {/* Session drawer */}
+      <SessionDrawer
+        isOpen={showSessionDrawer}
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onSelectSession={handleSwitchSession}
+        onNewSession={handleNewSession}
+        onDeleteSession={handleDeleteSession}
+        onClose={() => setShowSessionDrawer(false)}
       />
     </div>
   );
