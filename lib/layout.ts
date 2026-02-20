@@ -1,40 +1,28 @@
 import dagre from "dagre";
 import { Node, Edge } from "@xyflow/react";
 
-const NODE_WIDTH_LR = 400;
-const NODE_HEIGHT_LR = 350;
-const NODE_WIDTH_TB = 300;
-const NODE_HEIGHT_TB = 200;
-
 export function getLayoutedElements(
   nodes: Node[],
   edges: Edge[],
-  direction: "TB" | "LR" = "LR"
+  direction: "TB" | "LR" = "TB"
 ): { nodes: Node[]; edges: Edge[] } {
   const isMobile =
     typeof window !== "undefined" && window.innerWidth <= 768;
-  const isTB = direction === "TB";
-
-  const nodeW = isTB ? NODE_WIDTH_TB : NODE_WIDTH_LR;
-  const nodeH = isTB ? NODE_HEIGHT_TB : NODE_HEIGHT_LR;
 
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({
     rankdir: direction,
-    ranksep: isTB
-      ? (isMobile ? 80 : 180)
-      : (isMobile ? 100 : 400),
-    nodesep: isTB
-      ? (isMobile ? 60 : 150)
-      : (isMobile ? 80 : 250),
-    edgesep: isTB
-      ? (isMobile ? 20 : 50)
-      : (isMobile ? 30 : 80),
+    ranksep: isMobile ? 40 : 60,
+    nodesep: isMobile ? 30 : 50,
+    edgesep: isMobile ? 15 : 30,
   });
 
   nodes.forEach((node) => {
-    g.setNode(node.id, { width: nodeW, height: nodeH });
+    const isChatNode = node.data?.isChatNode;
+    const w = isChatNode ? 130 : (isMobile ? 240 : 300);
+    const h = isChatNode ? 40 : (isMobile ? 120 : 160);
+    g.setNode(node.id, { width: w, height: h });
   });
 
   edges.forEach((edge) => {
@@ -45,11 +33,14 @@ export function getLayoutedElements(
 
   const layoutedNodes = nodes.map((node) => {
     const pos = g.node(node.id);
+    const isChatNode = node.data?.isChatNode;
+    const w = isChatNode ? 130 : (isMobile ? 240 : 300);
+    const h = isChatNode ? 40 : (isMobile ? 120 : 160);
     return {
       ...node,
       position: {
-        x: pos.x - nodeW / 2,
-        y: pos.y - nodeH / 2,
+        x: pos.x - w / 2,
+        y: pos.y - h / 2,
       },
     };
   });

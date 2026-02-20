@@ -55,22 +55,22 @@ function ScenarioNode({ data }: { data: ScenarioNodeData }) {
   // ── 일반 대화 노드: 작고 흐릿한 퍼플 ──
   if (isChatNode) {
     return (
-      <div className="flex flex-col items-center" style={{ opacity: 0.6 }}>
+      <div className="flex flex-col items-center" style={{ opacity: 0.8 }}>
         <div
           className="rounded-xl transition-all duration-300"
           style={{
             width: "120px",
-            background: "rgba(15, 10, 30, 0.7)",
-            backdropFilter: "blur(8px)",
-            border: "1px solid rgba(179, 136, 255, 0.12)",
-            boxShadow: "0 0 12px rgba(179, 136, 255, 0.06)",
+            background: "rgba(8, 4, 20, 0.95)",
+            backdropFilter: "blur(16px)",
+            border: "1.5px solid rgba(179, 136, 255, 0.45)",
+            boxShadow: "0 0 12px rgba(179, 136, 255, 0.2), 0 0 24px rgba(179, 136, 255, 0.06), inset 0 0 10px rgba(179, 136, 255, 0.05)",
             padding: "8px 10px",
             overflow: "hidden",
           }}
         >
           <Handle
             type="target"
-            position={Position.Left}
+            position={Position.Top}
             id="target"
             className="!w-1.5 !h-1.5 !border"
             style={{
@@ -89,7 +89,7 @@ function ScenarioNode({ data }: { data: ScenarioNodeData }) {
           </p>
           <Handle
             type="source"
-            position={Position.Right}
+            position={Position.Bottom}
             id="source"
             className="!w-1.5 !h-1.5 !border"
             style={{
@@ -111,21 +111,23 @@ function ScenarioNode({ data }: { data: ScenarioNodeData }) {
         style={{
           width: "min(280px, 80vw)",
           background: isDimBranch
-            ? "rgba(20, 15, 35, 0.8)"
-            : "rgba(8, 5, 25, 0.85)",
-          backdropFilter: "blur(16px)",
+            ? "rgba(12, 8, 24, 0.93)"
+            : "rgba(5, 2, 18, 0.96)",
+          backdropFilter: "blur(20px)",
           border: isCompareSelected
-            ? "2px solid rgba(179, 136, 255, 0.8)"
+            ? "2px solid rgba(179, 136, 255, 0.9)"
             : isOnActivePath
-              ? "1px solid rgba(212, 168, 83, 0.5)"
+              ? "1.5px solid rgba(212, 168, 83, 0.75)"
               : isDimBranch
-                ? "1px dashed rgba(179, 136, 255, 0.25)"
-                : "1px dashed rgba(212, 168, 83, 0.15)",
+                ? "1.5px solid rgba(179, 136, 255, 0.4)"
+                : "1.5px solid rgba(212, 168, 83, 0.35)",
           boxShadow: isCompareSelected
-            ? "0 0 30px rgba(179, 136, 255, 0.3)"
+            ? "0 0 35px rgba(179, 136, 255, 0.35), 0 0 60px rgba(179, 136, 255, 0.1), inset 0 0 18px rgba(179, 136, 255, 0.06)"
             : isOnActivePath
-              ? "0 0 20px rgba(212, 168, 83, 0.12)"
-              : "none",
+              ? "0 0 25px rgba(212, 168, 83, 0.2), 0 0 50px rgba(212, 168, 83, 0.08), inset 0 0 18px rgba(212, 168, 83, 0.04)"
+              : isDimBranch
+                ? "0 0 16px rgba(179, 136, 255, 0.12), inset 0 0 10px rgba(179, 136, 255, 0.03)"
+                : "0 0 16px rgba(212, 168, 83, 0.1), inset 0 0 10px rgba(212, 168, 83, 0.03)",
           padding: "16px",
           overflow: "hidden",
         }}

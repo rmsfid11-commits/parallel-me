@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import {
+  ReactFlow,
   ReactFlowProvider,
   useNodesState,
   useEdgesState,
@@ -18,9 +19,9 @@ import {
   Timeline,
   SimulationSession,
 } from "@/lib/types";
-import { type ScenarioNodeData } from "@/components/ScenarioNode";
-import MapPanel from "@/components/MapPanel";
-import MiniMap from "@/components/MiniMap";
+import ScenarioNode, { type ScenarioNodeData } from "@/components/ScenarioNode";
+
+const nodeTypes = { scenario: ScenarioNode };
 import ChatPanel from "@/components/ChatPanel";
 import StarField from "@/components/StarField";
 import ForkEffect from "@/components/ForkEffect";
@@ -30,7 +31,6 @@ import {
   stopAmbient,
   playNodeCreate,
   playBranchCreate,
-  playZoomOut,
   setMuted,
 } from "@/lib/sounds";
 
@@ -318,7 +318,6 @@ function SimulationCanvas() {
 
   // UI state
   const [isGenerating, setIsGenerating] = useState(false);
-  const [showFullMap, setShowFullMap] = useState(false);
   const [soundMuted, setSoundMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForkEffect, setShowForkEffect] = useState(false);
@@ -331,6 +330,15 @@ function SimulationCanvas() {
   // Map (ReactFlow)
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+  // Split layout
+  const [splitDir, setSplitDir] = useState<"LR" | "TB">("LR");
+  const [splitRatio, setSplitRatio] = useState(0.5);
+  const [splitSwapped, setSplitSwapped] = useState(false);
+  const isDraggingSplit = useRef(false);
+
+  // StarField props
+  const [zoomLevel, setZoomLevel] = useState(0.4);
 
   // Modals
   const [rewindModal, setRewindModal] = useState<{
@@ -716,70 +724,6 @@ function SimulationCanvas() {
   }, [profile, timelines, activeTimelineId]);
 
   // ── Collect branch nodes for minimap ──
-  const collectBranchNodes = useCallback(() => {
-    const result: {
-      id: string;
-      timeLabel: string;
-      isOnActivePath: boolean;
-      isDimBranch: boolean;
-      isChatNode?: boolean;
-      parentNodeId?: string;
-    }[] = [];
-
-    for (const timeline of timelinesRef.current) {
-      const isActive = timeline.id === activeTimelineIdRef.current;
-      let prevId: string | undefined;
-
-      for (const msg of timeline.messages) {
-        if (msg.role !== "assistant") continue;
-
-        const nodeId = `${timeline.id}-${msg.id}`;
-        const hasBranch = !!msg.branchPoint;
-
-        result.push({
-          id: nodeId,
-          timeLabel: hasBranch
-            ? (msg.branchPoint?.timeLabel || msg.timeLabel || "")
-            : "",
-          isOnActivePath: isActive,
-          isDimBranch: !isActive,
-          isChatNode: !hasBranch,
-          parentNodeId: prevId,
-        });
-        prevId = nodeId;
-
-        if (msg.branchPoint?.chosenIndex !== undefined) {
-          msg.branchPoint.choices.forEach((c, i) => {
-            if (i !== msg.branchPoint!.chosenIndex) {
-              const hasChild = timelinesRef.current.some(
-                (ct) =>
-                  ct.branchPointMsgId === msg.id && ct.choiceIndex === i
-              );
-              if (!hasChild) {
-                result.push({
-                  id: `dim-${timeline.id}-${msg.id}-${i}`,
-                  timeLabel: msg.branchPoint!.timeLabel,
-                  isOnActivePath: false,
-                  isDimBranch: true,
-                  parentNodeId: nodeId,
-                });
-              }
-            }
-          });
-        }
-      }
-
-      if (timeline.parentTimelineId) {
-        const parentNodeId = `${timeline.parentTimelineId}-${timeline.branchPointMsgId}`;
-        const first = result.find(
-          (r) => r.id.startsWith(timeline.id + "-") && !r.parentNodeId
-        );
-        if (first) first.parentNodeId = parentNodeId;
-      }
-    }
-    return result;
-  }, []);
-
   // ── Build ReactFlow graph ──
   const rebuildGraph = useCallback(
     (currentTimelines: Timeline[], currentActiveId: string) => {
@@ -928,9 +872,9 @@ function SimulationCanvas() {
         return {
           id: `e-${e.source}-${e.target}`,
           source: e.source,
-          sourceHandle: "source",
+          sourceHandle: "source",  // Bottom
           target: e.target,
-          targetHandle: "target",
+          targetHandle: "target",  // Top
           type: "default",
           style: {
             stroke: isChatEdge
@@ -946,11 +890,31 @@ function SimulationCanvas() {
       });
 
       const { nodes: layouted, edges: layoutedEdges } =
-        getLayoutedElements(flowNodes, flowEdges);
+        getLayoutedElements(flowNodes, flowEdges, "TB");
       setNodes(layouted);
       setEdges(layoutedEdges);
+
+      // 최신 노드로 자동 스크롤
+      const activeNodes = branchNodes.filter(bn => bn.isOnActivePath);
+      if (activeNodes.length > 0) {
+        const lastNode = activeNodes[activeNodes.length - 1];
+        const layoutedLast = layouted.find(n => n.id === lastNode.id);
+        if (layoutedLast) {
+          setTimeout(() => {
+            try {
+              fitView({
+                nodes: [{ id: layoutedLast.id }],
+                duration: 500,
+                padding: 0.5,
+              });
+            } catch {
+              // fitView may not be ready
+            }
+          }, 100);
+        }
+      }
     },
-    [setNodes, setEdges]
+    [setNodes, setEdges, fitView]
   );
 
   // Rebuild when timelines change
@@ -970,7 +934,7 @@ function SimulationCanvas() {
       choiceIndex: -1,
       choiceLabel: "",
     });
-    setShowFullMap(false);
+
 
     const src = timelinesRef.current.find((t) => t.id === timelineId);
     if (!src) return;
@@ -1165,6 +1129,40 @@ function SimulationCanvas() {
     [activeSessionId, sessions.length]
   );
 
+  // ── Split divider drag ──
+  const handleSplitPointerDown = useCallback((e: React.PointerEvent) => {
+    isDraggingSplit.current = true;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }, []);
+
+  const handleSplitPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!isDraggingSplit.current) return;
+      const rect = (e.currentTarget as HTMLElement).parentElement?.getBoundingClientRect();
+      if (!rect) return;
+      let ratio: number;
+      if (splitDir === "LR") {
+        ratio = (e.clientX - rect.left) / rect.width;
+      } else {
+        ratio = (e.clientY - rect.top) / rect.height;
+      }
+      setSplitRatio(Math.min(0.8, Math.max(0.2, ratio)));
+    },
+    [splitDir]
+  );
+
+  const handleSplitPointerUp = useCallback(() => {
+    isDraggingSplit.current = false;
+  }, []);
+
+  // ── ReactFlow zoom tracking ──
+  const handleMove = useCallback((_: unknown, viewport: { zoom: number }) => {
+    setZoomLevel(viewport.zoom);
+  }, []);
+
+  // ── Message count ──
+  const messageCount = timelines.flatMap((t) => t.messages).length;
+
   // Loading
   if (!profile) {
     return (
@@ -1178,26 +1176,28 @@ function SimulationCanvas() {
   }
 
   const activeMessages = getActiveMessages();
-  const branchNodesForMinimap = collectBranchNodes();
+
+  const isLR = splitDir === "LR";
 
   return (
     <div
-      className="w-screen h-screen flex flex-col"
+      className="w-screen h-screen relative overflow-hidden flex flex-col"
       style={{ background: "#000" }}
     >
-      {/* StarField */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <StarField />
-      </div>
+      {/* StarField — 배경 최하단 */}
+      <StarField messageCount={messageCount} zoomLevel={zoomLevel} splitDir={splitDir} splitRatio={splitRatio} />
 
       {/* Top bar */}
       <div
-        className="flex-none z-10 relative glass-panel"
+        className="flex-none relative z-20"
         style={{
-          paddingTop: "max(8px, env(safe-area-inset-top))",
+          background: "rgba(0,0,0,0.85)",
+          backdropFilter: "blur(12px)",
+          borderBottom: "1px solid rgba(212,168,83,0.08)",
+          paddingTop: "max(4px, env(safe-area-inset-top))",
         }}
       >
-        <div className="flex items-center justify-between px-3 py-2">
+        <div className="flex items-center justify-between px-3 py-1.5">
           <h1
             className="text-sm text-white/80 tracking-wide"
             style={{
@@ -1218,18 +1218,9 @@ function SimulationCanvas() {
                     onClick={() => setActiveTimelineId(t.id)}
                     className="px-1.5 py-0.5 rounded-full text-[9px] transition-all"
                     style={{
-                      background:
-                        t.id === activeTimelineId
-                          ? "rgba(212,168,83,0.15)"
-                          : "transparent",
-                      border:
-                        t.id === activeTimelineId
-                          ? "1px solid rgba(212,168,83,0.4)"
-                          : "1px solid rgba(255,255,255,0.06)",
-                      color:
-                        t.id === activeTimelineId
-                          ? "rgba(212,168,83,0.9)"
-                          : "rgba(255,255,255,0.25)",
+                      background: t.id === activeTimelineId ? "rgba(212,168,83,0.15)" : "transparent",
+                      border: t.id === activeTimelineId ? "1px solid rgba(212,168,83,0.4)" : "1px solid rgba(255,255,255,0.06)",
+                      color: t.id === activeTimelineId ? "rgba(212,168,83,0.9)" : "rgba(255,255,255,0.25)",
                     }}
                   >
                     {i + 1}
@@ -1238,7 +1229,35 @@ function SimulationCanvas() {
               </div>
             )}
 
-            {/* Sessions drawer toggle */}
+            {/* Split toggle */}
+            <button
+              onClick={() => setSplitDir((d) => (d === "LR" ? "TB" : "LR"))}
+              className="px-2 py-1 rounded-lg text-[11px] transition-all duration-300"
+              style={{
+                background: "rgba(0,0,0,0.5)",
+                border: "1px solid rgba(212,168,83,0.2)",
+                color: "rgba(212,168,83,0.7)",
+              }}
+              title={isLR ? "상하 분할" : "좌우 분할"}
+            >
+              {isLR ? "⬍" : "⬌"}
+            </button>
+
+            {/* Swap panels */}
+            <button
+              onClick={() => setSplitSwapped((s) => !s)}
+              className="px-2 py-1 rounded-lg text-[11px] transition-all duration-300"
+              style={{
+                background: splitSwapped ? "rgba(212,168,83,0.12)" : "rgba(0,0,0,0.5)",
+                border: "1px solid rgba(212,168,83,0.2)",
+                color: "rgba(212,168,83,0.7)",
+              }}
+              title="패널 위치 교체"
+            >
+              ⇄
+            </button>
+
+            {/* Sessions */}
             <button
               onClick={() => setShowSessionDrawer(true)}
               className="px-2 py-1 rounded-lg text-[11px] transition-all duration-300"
@@ -1248,25 +1267,17 @@ function SimulationCanvas() {
                 color: "rgba(179,136,255,0.6)",
               }}
             >
-              {sessions.length > 1
-                ? `${sessions.length}개 세션`
-                : "세션"}
+              {sessions.length > 1 ? `${sessions.length}개 세션` : "세션"}
             </button>
 
-            {/* Sound toggle */}
+            {/* Sound */}
             <button
-              onClick={() => {
-                const n = !soundMuted;
-                setSoundMuted(n);
-                setMuted(n);
-              }}
+              onClick={() => { const n = !soundMuted; setSoundMuted(n); setMuted(n); }}
               className="px-2 py-1 rounded-lg text-xs transition-all duration-300"
               style={{
                 background: "rgba(0,0,0,0.5)",
                 border: "1px solid rgba(255,255,255,0.06)",
-                color: soundMuted
-                  ? "rgba(255,255,255,0.2)"
-                  : "rgba(212,168,83,0.6)",
+                color: soundMuted ? "rgba(255,255,255,0.2)" : "rgba(212,168,83,0.6)",
               }}
             >
               {soundMuted ? "\u{1F507}" : "\u{1F50A}"}
@@ -1288,46 +1299,140 @@ function SimulationCanvas() {
         </div>
       </div>
 
-      {/* Minimap strip */}
-      <div className="flex-none z-10 relative">
-        <MiniMap
-          branchNodes={branchNodesForMinimap}
-          onTap={() => {
-            setShowFullMap(true);
-            setTimeout(
-              () => fitView({ duration: 600, padding: 0.3 }),
-              100
-            );
+      {/* Split content area */}
+      <div
+        className="flex-1 relative z-10 flex overflow-hidden"
+        style={{ flexDirection: isLR ? "row" : "column" }}
+        onPointerMove={handleSplitPointerMove}
+        onPointerUp={handleSplitPointerUp}
+      >
+        {/* Panel A (first) */}
+        <div
+          style={{
+            [isLR ? "width" : "height"]: `${splitRatio * 100}%`,
+            minWidth: isLR ? 0 : undefined,
+            minHeight: isLR ? undefined : 0,
+            position: "relative",
+            display: splitSwapped ? "flex" : undefined,
+            flexDirection: splitSwapped ? "column" : undefined,
           }}
-        />
-      </div>
+        >
+          {splitSwapped ? (
+            <ChatPanel
+              messages={activeMessages}
+              isGenerating={isGenerating}
+              onSendMessage={handleSendMessage}
+              onBranchChoice={handleBranchChoice}
+            />
+          ) : (
+            <>
+              {nodes.length === 0 && (
+                <div className="absolute inset-0 flex items-center justify-center z-10">
+                  <p className="text-xs text-center px-4" style={{ color: "rgba(255,255,255,0.2)" }}>
+                    대화를 시작하면 별자리가 생겨나.
+                  </p>
+                </div>
+              )}
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onMove={handleMove}
+                nodeTypes={nodeTypes}
+                fitView
+                minZoom={0.02}
+                maxZoom={1.5}
+                defaultViewport={{ x: 0, y: 0, zoom: 0.4 }}
+                proOptions={{ hideAttribution: true }}
+                panOnDrag
+                zoomOnScroll
+                zoomOnPinch
+                nodesDraggable={false}
+                nodesConnectable={false}
+                style={{ background: "transparent", width: "100%", height: "100%" }}
+              />
+            </>
+          )}
+        </div>
 
-      {/* Chat area */}
-      <div className="flex-1 overflow-hidden z-10 relative">
-        <ChatPanel
-          messages={activeMessages}
-          isGenerating={isGenerating}
-          onSendMessage={handleSendMessage}
-          onBranchChoice={handleBranchChoice}
-        />
-      </div>
-
-      {/* Full map overlay (from minimap tap) */}
-      {showFullMap && (
-        <MapPanel
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onFitView={() => {
-            fitView({ duration: 800, padding: 0.2 });
-            playZoomOut();
+        {/* Divider */}
+        <div
+          onPointerDown={handleSplitPointerDown}
+          style={{
+            [isLR ? "width" : "height"]: "6px",
+            cursor: isLR ? "col-resize" : "row-resize",
+            background: "rgba(212,168,83,0.08)",
+            flexShrink: 0,
+            position: "relative",
+            zIndex: 5,
+            touchAction: "none",
           }}
-          onAnalyze={handleAnalyze}
-          onClose={() => setShowFullMap(false)}
-          isOverlay
-        />
-      )}
+        >
+          <div
+            style={{
+              position: "absolute",
+              [isLR ? "top" : "left"]: "50%",
+              [isLR ? "left" : "top"]: "50%",
+              transform: "translate(-50%, -50%)",
+              [isLR ? "width" : "height"]: "2px",
+              [isLR ? "height" : "width"]: "24px",
+              borderRadius: "1px",
+              background: "rgba(212,168,83,0.35)",
+            }}
+          />
+        </div>
+
+        {/* Panel B (second) */}
+        <div
+          style={{
+            [isLR ? "width" : "height"]: `${(1 - splitRatio) * 100}%`,
+            minWidth: isLR ? 0 : undefined,
+            minHeight: isLR ? undefined : 0,
+            position: "relative",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {splitSwapped ? (
+            <>
+              {nodes.length === 0 && (
+                <div className="absolute inset-0 flex items-center justify-center z-10">
+                  <p className="text-xs text-center px-4" style={{ color: "rgba(255,255,255,0.2)" }}>
+                    대화를 시작하면 별자리가 생겨나.
+                  </p>
+                </div>
+              )}
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onMove={handleMove}
+                nodeTypes={nodeTypes}
+                fitView
+                minZoom={0.02}
+                maxZoom={1.5}
+                defaultViewport={{ x: 0, y: 0, zoom: 0.4 }}
+                proOptions={{ hideAttribution: true }}
+                panOnDrag
+                zoomOnScroll
+                zoomOnPinch
+                nodesDraggable={false}
+                nodesConnectable={false}
+                style={{ background: "transparent", width: "100%", height: "100%" }}
+              />
+            </>
+          ) : (
+            <ChatPanel
+              messages={activeMessages}
+              isGenerating={isGenerating}
+              onSendMessage={handleSendMessage}
+              onBranchChoice={handleBranchChoice}
+            />
+          )}
+        </div>
+      </div>
 
       {/* Fork effect */}
       <ForkEffect
@@ -1335,17 +1440,14 @@ function SimulationCanvas() {
         onComplete={() => setShowForkEffect(false)}
       />
 
-      {/* Error toast with retry */}
+      {/* Error toast */}
       {error && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 bg-red-900/80 backdrop-blur-md border border-red-500/30 rounded-xl animate-slideUp">
           <p className="text-sm text-red-300">{error}</p>
           <div className="flex gap-3 mt-2">
             {startFailed && (
               <button
-                onClick={() => {
-                  hasStartedRef.current = false;
-                  startChat();
-                }}
+                onClick={() => { hasStartedRef.current = false; startChat(); }}
                 className="text-xs text-amber-400/80 hover:text-amber-300 transition-colors"
               >
                 다시 시도
@@ -1366,13 +1468,7 @@ function SimulationCanvas() {
         isOpen={rewindModal.open}
         onConfirm={handleRewind}
         onCancel={() =>
-          setRewindModal({
-            open: false,
-            timelineId: "",
-            msgId: "",
-            choiceIndex: -1,
-            choiceLabel: "",
-          })
+          setRewindModal({ open: false, timelineId: "", msgId: "", choiceIndex: -1, choiceLabel: "" })
         }
       />
       <ReportModal
@@ -1381,8 +1477,6 @@ function SimulationCanvas() {
         isLoading={reportLoading}
         onClose={() => setReportModal(false)}
       />
-
-      {/* Session drawer */}
       <SessionDrawer
         isOpen={showSessionDrawer}
         sessions={sessions}
