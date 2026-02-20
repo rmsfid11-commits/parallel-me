@@ -1,32 +1,22 @@
 // ── 시뮬레이션 모드 ──
 export type SimulationMode = "희망적 우주" | "현실적 우주" | "최악의 우주";
 
-// ── UserProfile (온보딩 수집) ──
+// ── UserProfile (온보딩 수집 + 대화하면서 쌓이는 기억) ──
 export interface UserProfile {
   birthday: string;           // "1992.04.27"
   birthTime: string;          // "16:34" 또는 "모름"
-  job: string;                // 직업
-  careerYears: string;        // 경력/연차 "15년", "3년차"
-  age: number;                // 나이
-  monthlyIncome: string;      // 월수입 "600만원"
-  debt: string;               // 빚 "1800만원" 또는 "없음"
-  pastExperience: string;     // 과거 사업/부업 경험
-  interest: string;           // 요즘 관심사
-  question: string;           // 미래에서 궁금한 것
+  job: string;
+  careerYears: string;
+  age: number;
+  monthlyIncome: string;
+  debt: string;
+  pastExperience: string;
+  interest: string;
+  question: string;
   mode: SimulationMode;
-}
 
-// ── 스토리 시나리오 (자동 진행 모드) ──
-export interface StoryScenario {
-  id: string;
-  timeLabel: string;
-  content: string;
-  autoChoice?: string;      // AI's auto-choice (internal)
-  isBranch: boolean;
-  branchMessage?: string;
-  interventionText?: string; // user's intervention text
-  parentId: string | null;
-  timelineId: string;
+  // 대화하면서 쌓이는 기억들 — "나를 기억하는 AI"의 핵심
+  learnedFacts?: string[];    // ["스마트팜 관심있음", "결혼 고려중", "5년 안에 FIRE 목표"]
 }
 
 // ── 채팅 메시지 ──
@@ -36,8 +26,8 @@ export interface ChatMessage {
   content: string;
   branchPoint?: BranchPointData;
   timestamp: number;
-  timeLabel?: string;         // 스토리 모드 시간 태그
-  isIntervention?: boolean;   // 사용자 개입 텍스트
+  timeLabel?: string;
+  isIntervention?: boolean;
 }
 
 // ── 분기점 데이터 ──

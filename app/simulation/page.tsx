@@ -722,6 +722,7 @@ function SimulationCanvas() {
       timeLabel: string;
       isOnActivePath: boolean;
       isDimBranch: boolean;
+      isChatNode?: boolean;
       parentNodeId?: string;
     }[] = [];
 
@@ -730,36 +731,41 @@ function SimulationCanvas() {
       let prevId: string | undefined;
 
       for (const msg of timeline.messages) {
-        if (msg.role === "assistant" && (msg.branchPoint || msg.timeLabel)) {
-          const nodeId = `${timeline.id}-${msg.id}`;
-          result.push({
-            id: nodeId,
-            timeLabel: msg.branchPoint?.timeLabel || msg.timeLabel || "",
-            isOnActivePath: isActive,
-            isDimBranch: !isActive,
-            parentNodeId: prevId,
-          });
-          prevId = nodeId;
+        if (msg.role !== "assistant") continue;
 
-          if (msg.branchPoint?.chosenIndex !== undefined) {
-            msg.branchPoint.choices.forEach((c, i) => {
-              if (i !== msg.branchPoint!.chosenIndex) {
-                const hasChild = timelinesRef.current.some(
-                  (ct) =>
-                    ct.branchPointMsgId === msg.id && ct.choiceIndex === i
-                );
-                if (!hasChild) {
-                  result.push({
-                    id: `dim-${timeline.id}-${msg.id}-${i}`,
-                    timeLabel: msg.branchPoint!.timeLabel,
-                    isOnActivePath: false,
-                    isDimBranch: true,
-                    parentNodeId: nodeId,
-                  });
-                }
+        const nodeId = `${timeline.id}-${msg.id}`;
+        const hasBranch = !!msg.branchPoint;
+
+        result.push({
+          id: nodeId,
+          timeLabel: hasBranch
+            ? (msg.branchPoint?.timeLabel || msg.timeLabel || "")
+            : "",
+          isOnActivePath: isActive,
+          isDimBranch: !isActive,
+          isChatNode: !hasBranch,
+          parentNodeId: prevId,
+        });
+        prevId = nodeId;
+
+        if (msg.branchPoint?.chosenIndex !== undefined) {
+          msg.branchPoint.choices.forEach((c, i) => {
+            if (i !== msg.branchPoint!.chosenIndex) {
+              const hasChild = timelinesRef.current.some(
+                (ct) =>
+                  ct.branchPointMsgId === msg.id && ct.choiceIndex === i
+              );
+              if (!hasChild) {
+                result.push({
+                  id: `dim-${timeline.id}-${msg.id}-${i}`,
+                  timeLabel: msg.branchPoint!.timeLabel,
+                  isOnActivePath: false,
+                  isDimBranch: true,
+                  parentNodeId: nodeId,
+                });
               }
-            });
-          }
+            }
+          });
         }
       }
 
@@ -787,73 +793,73 @@ function SimulationCanvas() {
         parentNodeId?: string;
         isOnActivePath: boolean;
         isDimBranch: boolean;
+        isChatNode: boolean;
       }[] = [];
       const edgeList: { source: string; target: string }[] = [];
 
       for (const timeline of currentTimelines) {
         const isActive = timeline.id === currentActiveId;
-        let prevBranchNodeId: string | undefined;
+        let prevNodeId: string | undefined;
 
         for (const msg of timeline.messages) {
-          if (
-            msg.role === "assistant" &&
-            (msg.branchPoint || msg.timeLabel)
-          ) {
-            const nodeId = `${timeline.id}-${msg.id}`;
-            const summary =
-              msg.branchPoint?.summary ||
-              msg.content.substring(0, 80) + "...";
-            const choiceLabel =
-              msg.branchPoint?.chosenIndex !== undefined
-                ? msg.branchPoint.choices[msg.branchPoint.chosenIndex]?.label
-                : undefined;
+          if (msg.role !== "assistant") continue;
 
-            branchNodes.push({
-              id: nodeId,
-              timeLabel:
-                msg.branchPoint?.timeLabel || msg.timeLabel || "",
-              summary,
-              choiceLabel,
-              timelineId: timeline.id,
-              msgId: msg.id,
-              parentNodeId: prevBranchNodeId,
-              isOnActivePath: isActive,
-              isDimBranch: !isActive,
-            });
+          const nodeId = `${timeline.id}-${msg.id}`;
+          const hasBranch = !!msg.branchPoint;
 
-            if (prevBranchNodeId)
-              edgeList.push({
-                source: prevBranchNodeId,
-                target: nodeId,
-              });
-            prevBranchNodeId = nodeId;
+          const summary = hasBranch
+            ? (msg.branchPoint?.summary || msg.content.substring(0, 80) + "...")
+            : msg.content.substring(0, 20) + (msg.content.length > 20 ? "..." : "");
+          const choiceLabel = hasBranch && msg.branchPoint?.chosenIndex !== undefined
+            ? msg.branchPoint.choices[msg.branchPoint.chosenIndex]?.label
+            : undefined;
 
-            if (msg.branchPoint?.chosenIndex !== undefined) {
-              msg.branchPoint.choices.forEach((c, i) => {
-                if (i !== msg.branchPoint!.chosenIndex) {
-                  const hasChild = currentTimelines.some(
-                    (ct) =>
-                      ct.branchPointMsgId === msg.id &&
-                      ct.choiceIndex === i
-                  );
-                  if (!hasChild) {
-                    const dimId = `dim-${timeline.id}-${msg.id}-${i}`;
-                    branchNodes.push({
-                      id: dimId,
-                      timeLabel: msg.branchPoint!.timeLabel,
-                      summary: msg.branchPoint!.summary,
-                      choiceLabel: c.label,
-                      timelineId: timeline.id,
-                      msgId: msg.id,
-                      parentNodeId: nodeId,
-                      isOnActivePath: false,
-                      isDimBranch: true,
-                    });
-                    edgeList.push({ source: nodeId, target: dimId });
-                  }
+          branchNodes.push({
+            id: nodeId,
+            timeLabel: hasBranch
+              ? (msg.branchPoint?.timeLabel || msg.timeLabel || "")
+              : "",
+            summary,
+            choiceLabel,
+            timelineId: timeline.id,
+            msgId: msg.id,
+            parentNodeId: prevNodeId,
+            isOnActivePath: isActive,
+            isDimBranch: !isActive,
+            isChatNode: !hasBranch,
+          });
+
+          if (prevNodeId)
+            edgeList.push({ source: prevNodeId, target: nodeId });
+          prevNodeId = nodeId;
+
+          // 분기점의 선택 안 한 가지
+          if (msg.branchPoint?.chosenIndex !== undefined) {
+            msg.branchPoint.choices.forEach((c, i) => {
+              if (i !== msg.branchPoint!.chosenIndex) {
+                const hasChild = currentTimelines.some(
+                  (ct) =>
+                    ct.branchPointMsgId === msg.id &&
+                    ct.choiceIndex === i
+                );
+                if (!hasChild) {
+                  const dimId = `dim-${timeline.id}-${msg.id}-${i}`;
+                  branchNodes.push({
+                    id: dimId,
+                    timeLabel: msg.branchPoint!.timeLabel,
+                    summary: msg.branchPoint!.summary,
+                    choiceLabel: c.label,
+                    timelineId: timeline.id,
+                    msgId: msg.id,
+                    parentNodeId: nodeId,
+                    isOnActivePath: false,
+                    isDimBranch: true,
+                    isChatNode: false,
+                  });
+                  edgeList.push({ source: nodeId, target: dimId });
                 }
-              });
-            }
+              }
+            });
           }
         }
         if (timeline.parentTimelineId) {
@@ -882,6 +888,7 @@ function SimulationCanvas() {
           choiceLabel: bn.choiceLabel,
           isOnActivePath: bn.isOnActivePath,
           isDimBranch: bn.isDimBranch,
+          isChatNode: bn.isChatNode,
           isExpanded: false,
           timelineId: bn.timelineId,
           msgId: bn.msgId,
@@ -916,6 +923,8 @@ function SimulationCanvas() {
 
       const flowEdges: Edge[] = edgeList.map((e) => {
         const target = branchNodes.find((n) => n.id === e.target);
+        const source = branchNodes.find((n) => n.id === e.source);
+        const isChatEdge = target?.isChatNode || source?.isChatNode;
         return {
           id: `e-${e.source}-${e.target}`,
           source: e.source,
@@ -924,13 +933,15 @@ function SimulationCanvas() {
           targetHandle: "target",
           type: "default",
           style: {
-            stroke: target?.isOnActivePath
-              ? "rgba(212,168,83,0.6)"
-              : "rgba(212,168,83,0.15)",
-            strokeWidth: target?.isOnActivePath ? 2.5 : 1.5,
-            strokeDasharray: target?.isDimBranch ? "6 4" : undefined,
+            stroke: isChatEdge
+              ? (target?.isOnActivePath ? "rgba(179,136,255,0.2)" : "rgba(179,136,255,0.08)")
+              : target?.isOnActivePath
+                ? "rgba(212,168,83,0.6)"
+                : "rgba(212,168,83,0.15)",
+            strokeWidth: isChatEdge ? 1 : (target?.isOnActivePath ? 2.5 : 1.5),
+            strokeDasharray: target?.isDimBranch ? "6 4" : isChatEdge ? "3 3" : undefined,
           },
-          animated: target?.isOnActivePath || false,
+          animated: !isChatEdge && (target?.isOnActivePath || false),
         };
       });
 

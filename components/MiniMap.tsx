@@ -7,6 +7,7 @@ interface MiniMapNode {
   timeLabel: string;
   isActive: boolean;
   isDim: boolean;
+  isChatNode: boolean;
   x: number;
   y: number;
 }
@@ -22,6 +23,7 @@ interface MiniMapProps {
     timeLabel: string;
     isOnActivePath: boolean;
     isDimBranch: boolean;
+    isChatNode?: boolean;
     parentNodeId?: string;
   }[];
   onTap: () => void;
@@ -74,6 +76,7 @@ export default function MiniMap({ branchNodes, onTap }: MiniMapProps) {
         timeLabel: node.timeLabel,
         isActive: node.isOnActivePath,
         isDim: node.isDimBranch,
+        isChatNode: !!node.isChatNode,
         x,
         y,
       });
@@ -212,10 +215,11 @@ export default function MiniMap({ branchNodes, onTap }: MiniMapProps) {
         // Skip if off-screen
         if (nx < -20 || nx > w + 20) continue;
 
-        const radius = node.isActive ? 5 : 3.5;
+        const isCN = node.isChatNode;
+        const radius = isCN ? 2 : (node.isActive ? 5 : 3.5);
 
-        // Glow for active nodes
-        if (node.isActive) {
+        // Glow for active branch nodes
+        if (node.isActive && !isCN) {
           const glowR = radius + 8 + pulseRef.current * 6;
           const glow = ctx.createRadialGradient(nx, ny, 0, nx, ny, glowR);
           glow.addColorStop(0, "rgba(212, 168, 83, 0.25)");
@@ -224,18 +228,30 @@ export default function MiniMap({ branchNodes, onTap }: MiniMapProps) {
           ctx.fillRect(nx - glowR, ny - glowR, glowR * 2, glowR * 2);
         }
 
+        // Subtle glow for chat nodes
+        if (isCN && node.isActive) {
+          const glowR = radius + 4;
+          const glow = ctx.createRadialGradient(nx, ny, 0, nx, ny, glowR);
+          glow.addColorStop(0, "rgba(179, 136, 255, 0.15)");
+          glow.addColorStop(1, "transparent");
+          ctx.fillStyle = glow;
+          ctx.fillRect(nx - glowR, ny - glowR, glowR * 2, glowR * 2);
+        }
+
         // Node circle
         ctx.beginPath();
         ctx.arc(nx, ny, radius, 0, Math.PI * 2);
-        ctx.fillStyle = node.isActive
-          ? "#d4a853"
-          : node.isDim
-            ? "rgba(179, 136, 255, 0.3)"
-            : "rgba(212, 168, 83, 0.3)";
+        ctx.fillStyle = isCN
+          ? (node.isActive ? "rgba(179, 136, 255, 0.5)" : "rgba(179, 136, 255, 0.15)")
+          : node.isActive
+            ? "#d4a853"
+            : node.isDim
+              ? "rgba(179, 136, 255, 0.3)"
+              : "rgba(212, 168, 83, 0.3)";
         ctx.fill();
 
         // Border
-        if (node.isActive) {
+        if (node.isActive && !isCN) {
           ctx.strokeStyle = "rgba(212, 168, 83, 0.6)";
           ctx.lineWidth = 1;
           ctx.stroke();

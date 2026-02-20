@@ -9,6 +9,7 @@ export interface ScenarioNodeData {
   choiceLabel?: string;
   isOnActivePath: boolean;
   isDimBranch: boolean;       // 선택 안 한 가지
+  isChatNode?: boolean;       // 일반 대화 노드 (분기점 아님)
   isExpanded: boolean;
   timelineId: string;
   msgId: string;
@@ -27,6 +28,7 @@ function ScenarioNode({ data }: { data: ScenarioNodeData }) {
     choiceLabel,
     isOnActivePath,
     isDimBranch,
+    isChatNode,
     isExpanded,
     compareMode,
     isCompareSelected,
@@ -50,6 +52,57 @@ function ScenarioNode({ data }: { data: ScenarioNodeData }) {
     }
   };
 
+  // ── 일반 대화 노드: 작고 흐릿한 퍼플 ──
+  if (isChatNode) {
+    return (
+      <div className="flex flex-col items-center" style={{ opacity: 0.6 }}>
+        <div
+          className="rounded-xl transition-all duration-300"
+          style={{
+            width: "120px",
+            background: "rgba(15, 10, 30, 0.7)",
+            backdropFilter: "blur(8px)",
+            border: "1px solid rgba(179, 136, 255, 0.12)",
+            boxShadow: "0 0 12px rgba(179, 136, 255, 0.06)",
+            padding: "8px 10px",
+            overflow: "hidden",
+          }}
+        >
+          <Handle
+            type="target"
+            position={Position.Left}
+            id="target"
+            className="!w-1.5 !h-1.5 !border"
+            style={{
+              background: "rgba(179, 136, 255, 0.4)",
+              borderColor: "rgba(179, 136, 255, 0.2)",
+            }}
+          />
+          <p
+            className="text-[10px] leading-snug"
+            style={{
+              color: "rgba(179, 136, 255, 0.5)",
+              wordBreak: "keep-all",
+            }}
+          >
+            {summary}
+          </p>
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="source"
+            className="!w-1.5 !h-1.5 !border"
+            style={{
+              background: "rgba(179, 136, 255, 0.4)",
+              borderColor: "rgba(179, 136, 255, 0.2)",
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // ── 분기점 노드: 기존 골드 스타일 ──
   return (
     <div className="flex flex-col items-center" style={dimStyle}>
       <div

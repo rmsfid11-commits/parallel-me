@@ -36,6 +36,12 @@ export default function ChatPanel({
   const isNearBottomRef = useRef(true);
   const [hasUnread, setHasUnread] = useState(false);
 
+  // ── Suggestions ──
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suggestFetchedRef = useRef(false);
+
   // ── Mobile detect ──
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -70,6 +76,11 @@ export default function ChatPanel({
       } else {
         setHasUnread(true);
       }
+
+      // Reset suggestions on new message
+      setSuggestions([]);
+      setShowSuggestions(false);
+      suggestFetchedRef.current = false;
     }
     prevMsgCountRef.current = messages.length;
   }, [messages]);
@@ -108,6 +119,52 @@ export default function ChatPanel({
 
     return () => clearInterval(timer);
   }, [typingMsgId]);
+
+  // ── Idle suggestion timer ──
+  useEffect(() => {
+    // Clear previous timer
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+
+    // Don't show while generating, typing, or if input has text
+    if (isGenerating || typingMsgId || input.trim() || messages.length < 2) {
+      setShowSuggestions(false);
+      return;
+    }
+
+    // Already fetched for this message set
+    if (suggestFetchedRef.current) return;
+
+    idleTimerRef.current = setTimeout(async () => {
+      if (suggestFetchedRef.current) return;
+      suggestFetchedRef.current = true;
+
+      try {
+        const res = await fetch("/api/suggest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: messages.slice(-6) }),
+        });
+        const data = await res.json();
+        if (data.suggestions && data.suggestions.length > 0) {
+          setSuggestions(data.suggestions);
+          setShowSuggestions(true);
+        }
+      } catch {
+        // silent fail
+      }
+    }, 5000);
+
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    };
+  }, [messages, isGenerating, typingMsgId, input]);
+
+  // Hide suggestions when user starts typing
+  useEffect(() => {
+    if (input.trim()) {
+      setShowSuggestions(false);
+    }
+  }, [input]);
 
   // ── Scroll detection ──
   const handleScroll = useCallback(() => {
@@ -155,6 +212,9 @@ export default function ChatPanel({
     if (!trimmed || isGenerating) return;
     onSendMessage(trimmed);
     setInput("");
+    setSuggestions([]);
+    setShowSuggestions(false);
+    suggestFetchedRef.current = false;
     if (inputRef.current) {
       inputRef.current.style.height = "auto";
     }
@@ -167,6 +227,12 @@ export default function ChatPanel({
     }, 50);
   }, [input, isGenerating, onSendMessage]);
 
+  const handleSuggestionClick = useCallback((text: string) => {
+    setInput(text);
+    setShowSuggestions(false);
+    inputRef.current?.focus();
+  }, []);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -176,17 +242,6 @@ export default function ChatPanel({
     },
     [handleSend]
   );
-
-  // ── Quick actions ──
-  const lastMsg =
-    messages.length > 0 ? messages[messages.length - 1] : null;
-  const showQuickActions =
-    lastMsg &&
-    lastMsg.role === "assistant" &&
-    !lastMsg.branchPoint &&
-    !isGenerating &&
-    !typingMsgId &&
-    messages.length > 1;
 
   return (
     <div
@@ -230,38 +285,6 @@ export default function ChatPanel({
               )}
           </div>
         ))}
-
-        {/* Quick action chips */}
-        {showQuickActions && (
-          <div className="flex gap-2 px-1 animate-fadeIn">
-            {["계속", "더 자세히"].map((label) => (
-              <button
-                key={label}
-                onClick={() => onSendMessage(label)}
-                className="px-3.5 py-1.5 rounded-full text-[12px] transition-all duration-300"
-                style={{
-                  background: "rgba(212,168,83,0.08)",
-                  border: "1px solid rgba(212,168,83,0.2)",
-                  color: "rgba(212,168,83,0.7)",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background =
-                    "rgba(212,168,83,0.15)";
-                  e.currentTarget.style.borderColor =
-                    "rgba(212,168,83,0.4)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background =
-                    "rgba(212,168,83,0.08)";
-                  e.currentTarget.style.borderColor =
-                    "rgba(212,168,83,0.2)";
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* Typing indicator (only when waiting for API, not during reveal) */}
         {isGenerating && !typingMsgId && (
@@ -328,6 +351,39 @@ export default function ChatPanel({
           paddingBottom: "max(12px, env(safe-area-inset-bottom))",
         }}
       >
+        {/* Suggestions */}
+        {showSuggestions && suggestions.length > 0 && (
+          <div className="flex gap-2 mb-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+            {suggestions.map((s, i) => (
+              <button
+                key={i}
+                onClick={() => handleSuggestionClick(s)}
+                className="flex-none px-3 py-1.5 rounded-full text-[12px] transition-all duration-500 animate-fadeIn"
+                style={{
+                  background: "rgba(212,168,83,0.06)",
+                  border: "1px solid rgba(212,168,83,0.15)",
+                  color: "rgba(212,168,83,0.6)",
+                  animationDelay: `${i * 150}ms`,
+                  animationFillMode: "both",
+                  whiteSpace: "nowrap",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(212,168,83,0.12)";
+                  e.currentTarget.style.borderColor = "rgba(212,168,83,0.3)";
+                  e.currentTarget.style.color = "rgba(212,168,83,0.85)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(212,168,83,0.06)";
+                  e.currentTarget.style.borderColor = "rgba(212,168,83,0.15)";
+                  e.currentTarget.style.color = "rgba(212,168,83,0.6)";
+                }}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div
           className="flex items-end gap-2 rounded-xl px-3 py-2"
           style={{
@@ -340,7 +396,7 @@ export default function ChatPanel({
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder="계속 / 개입 / 질문..."
+            placeholder="무엇이든 물어봐..."
             rows={1}
             className="flex-1 bg-transparent outline-none resize-none text-[14px] md:text-[15px] placeholder:text-white/25"
             style={{

@@ -140,9 +140,7 @@ export default function MapPanel({
               className="text-sm text-center px-4"
               style={{ color: "rgba(255,255,255,0.25)" }}
             >
-              아직 갈림길이 없어.
-              <br />
-              선택지를 골라보면 우주가 펼쳐질 거야.
+              대화를 시작하면 별자리가 생겨나.
             </p>
           </div>
         )}
