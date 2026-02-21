@@ -741,12 +741,11 @@ export default function StarField({
         u.uMsgCount.value = smoothMsg;
         u.uZoom.value     = smoothZoom;
 
-        // Solar center follows split divider
-        const sd = splitDirRef.current;
-        const sr = splitRatioRef.current;
+        // Solar center — gentle drift around screen center
+        const elapsed = u.uTime.value;
         u.uSolarCenter.value.set(
-          sd === "LR" ? sr : 0.5,
-          sd === "LR" ? 0.5 : 1.0 - sr
+          0.5 + Math.sin(elapsed * 0.015) * 0.08,
+          0.5 + Math.cos(elapsed * 0.012) * 0.05
         );
 
         renderer.render(scene, camera);
