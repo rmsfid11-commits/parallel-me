@@ -1345,10 +1345,11 @@ function SimulationCanvas() {
         {/* Panel A (first) */}
         <div
           style={{
-            [isLR ? "width" : "height"]: `${splitRatio * 100}%`,
-            minWidth: isLR ? 0 : undefined,
-            minHeight: isLR ? undefined : 0,
+            flex: splitRatio,
+            minWidth: 0,
+            minHeight: 0,
             position: "relative",
+            overflow: "hidden",
             display: splitSwapped ? "flex" : undefined,
             flexDirection: splitSwapped ? "column" : undefined,
           }}
@@ -1435,12 +1436,13 @@ function SimulationCanvas() {
         {/* Panel B (second) */}
         <div
           style={{
-            [isLR ? "width" : "height"]: `${(1 - splitRatio) * 100}%`,
-            minWidth: isLR ? 0 : undefined,
-            minHeight: isLR ? undefined : 0,
+            flex: 1 - splitRatio,
+            minWidth: 0,
+            minHeight: 0,
             position: "relative",
             display: "flex",
             flexDirection: "column",
+            overflow: "hidden",
           }}
         >
           {splitSwapped ? (
