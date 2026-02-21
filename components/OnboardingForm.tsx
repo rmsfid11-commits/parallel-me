@@ -103,6 +103,7 @@ export default function OnboardingForm() {
     interest: "",
     question: "",
     mode: "현실적 우주",
+    learnedFacts: [],
   });
   const [phase, setPhase] = useState<
     "input" | "reacting" | "transitioning" | "loading"

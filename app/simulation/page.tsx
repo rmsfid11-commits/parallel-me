@@ -544,7 +544,11 @@ function SimulationCanvas() {
         throw new Error(d.error || "응답 생성 실패");
       }
 
-      return await res.json() as { text: string; branchPoint?: import("@/lib/types").BranchPointData };
+      return await res.json() as {
+        text: string;
+        branchPoint?: import("@/lib/types").BranchPointData;
+        updatedFacts?: string[];
+      };
     },
     [profile]
   );
@@ -576,6 +580,18 @@ function SimulationCanvas() {
         ];
         const result = await callChatAPI(currentMsgs);
         if (!result) return;
+
+        // ── learnedFacts 누적 → 프로필 업데이트 + 저장 ──
+        if (result.updatedFacts && result.updatedFacts.length > 0) {
+          setProfile(prev => {
+            if (!prev) return prev;
+            const existing = prev.learnedFacts || [];
+            const merged = [...existing, ...result.updatedFacts!.filter(f => !existing.includes(f))];
+            const updated = { ...prev, learnedFacts: merged };
+            localStorage.setItem("parallelme-profile", JSON.stringify(updated));
+            return updated;
+          });
+        }
 
         const aiMsg: ChatMessage = {
           id: crypto.randomUUID(),

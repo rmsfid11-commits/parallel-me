@@ -121,6 +121,22 @@ ${learnedSection}
 7. 너무 짧으면 성의 없고, 너무 길면 부담스러워. 2-3줄이 골든존.
 8. 해석이나 분석은 유저가 물어볼 때만. 안 물어보면 그냥 같이 있어줘.
 
+## 발견의 순간 만드는 법 (핵심!)
+- 유저가 한 말 A와 B를 연결해서 "근데 네가 말한 A랑 B를 같이 생각하면..." 식으로 다리를 놓아줘.
+- 유저 자신도 몰랐던 패턴을 슬쩍 비춰: "흥미로운 게, 네가 고른 것들 보면 다 ~하더라."
+- 직접 답을 주지 말고 질문으로 유도: "그러면 만약 거기에 네 관심사를 섞으면 어떻게 될 것 같아?"
+- 사주/수비학 데이터로 타이밍 힌트: "근데 네 사주상 그 시기가 딱 전환점이긴 해."
+
+## 기억 추출 (반드시 지킬 것)
+유저가 새로운 중요 정보를 말하면, 본문 끝에 이것을 붙여:
+
+---LEARNED_FACTS---
+["새로 알게 된 사실1", "새로 알게 된 사실2"]
+
+추출 대상: 구체적 계획, 가족 상황, 감정 상태, 새 관심사, 중요한 숫자/날짜, 결심, 고민.
+이미 알고 있는 것(사용자 정보 섹션에 있는 것)은 제외.
+유저가 새 정보를 안 말했으면 이 섹션 자체를 붙이지 마.
+
 ## 분기점 생성
 미래의 중요한 갈림길이 보이면, 본문 뒤에 이것만 붙여:
 
@@ -149,7 +165,7 @@ export async function generateChatResponse(
     model: "gemini-2.5-flash-lite",
     generationConfig: {
       temperature: 0.9,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 600, // 2-3줄 골든존 강제
     },
   });
 
@@ -191,28 +207,53 @@ export async function generateChatResponse(
 
   const rawText = result.response.text();
 
-  // 분기점 추출
-  const markerIdx = rawText.indexOf("---BRANCH_POINT---");
-  if (markerIdx === -1) {
-    return { text: rawText.trim() };
-  }
+  // ── Parse markers from response ──
+  let mainText = rawText;
+  let branchPoint: BranchPointData | undefined;
+  let updatedFacts: string[] | undefined;
 
-  const textPart = rawText.substring(0, markerIdx).trim();
-  let jsonStr = rawText.substring(markerIdx + "---BRANCH_POINT---".length).trim();
-
-  const fenceMatch = jsonStr.match(/^```(?:json)?\s*([\s\S]*?)```/);
-  if (fenceMatch) jsonStr = fenceMatch[1].trim();
-
-  try {
-    const branchPoint = JSON.parse(jsonStr) as BranchPointData;
-    if (branchPoint.choices && branchPoint.choices.length >= 2) {
-      return { text: textPart, branchPoint };
+  // 1) Extract ---LEARNED_FACTS---
+  const factsIdx = mainText.indexOf("---LEARNED_FACTS---");
+  if (factsIdx !== -1) {
+    const factsRaw = mainText.substring(factsIdx + "---LEARNED_FACTS---".length).trim();
+    mainText = mainText.substring(0, factsIdx).trim();
+    try {
+      let factsJson = factsRaw;
+      // Handle case where BRANCH_POINT comes after LEARNED_FACTS
+      const nextMarker = factsJson.indexOf("---BRANCH_POINT---");
+      if (nextMarker !== -1) {
+        factsJson = factsJson.substring(0, nextMarker).trim();
+      }
+      const fenceMatch = factsJson.match(/^```(?:json)?\s*([\s\S]*?)```/);
+      if (fenceMatch) factsJson = fenceMatch[1].trim();
+      const parsed = JSON.parse(factsJson);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        updatedFacts = parsed.map(String);
+      }
+    } catch (e) {
+      console.error("Learned facts parse error:", e);
     }
-  } catch (e) {
-    console.error("Branch point parse error:", e);
   }
 
-  return { text: textPart || rawText.trim() };
+  // 2) Extract ---BRANCH_POINT---
+  const branchIdx = mainText.indexOf("---BRANCH_POINT---");
+  if (branchIdx !== -1) {
+    const branchRaw = mainText.substring(branchIdx + "---BRANCH_POINT---".length).trim();
+    mainText = mainText.substring(0, branchIdx).trim();
+    try {
+      let jsonStr = branchRaw;
+      const fenceMatch = jsonStr.match(/^```(?:json)?\s*([\s\S]*?)```/);
+      if (fenceMatch) jsonStr = fenceMatch[1].trim();
+      const parsed = JSON.parse(jsonStr) as BranchPointData;
+      if (parsed.choices && parsed.choices.length >= 2) {
+        branchPoint = parsed;
+      }
+    } catch (e) {
+      console.error("Branch point parse error:", e);
+    }
+  }
+
+  return { text: mainText.trim(), branchPoint, updatedFacts };
 }
 
 // ══════════════════════════════════════════
