@@ -28,6 +28,7 @@ uniform float uTime;
 uniform vec2 uResolution;
 uniform float uMsgCount;
 uniform float uZoom;
+uniform vec2 uSolarCenter;
 
 varying vec2 vUv;
 
@@ -148,8 +149,12 @@ void main() {
   float t  = uTime;
   float mc = uMsgCount;
 
-  // Fixed solar center at 70% horizontal
-  vec2 solarC = vec2((0.7 - 0.5) * aspect + 0.5, 0.5);
+  // Solar center follows split position
+  vec2 solarC = vec2((uSolarCenter.x - 0.5) * aspect + 0.5, uSolarCenter.y);
+
+  // Mobile: compact solar system on narrow screens
+  float mobileF = smoothstep(500.0, 900.0, uResolution.x);
+  float solarScale = 0.6 + mobileF * 0.4;
 
   // Zoom tiers
   float zN      = clamp((uZoom - 0.02) / 1.48, 0.0, 1.0);
@@ -292,7 +297,7 @@ void main() {
     }
 
     // Corona — cutoff 30%, gentle
-    float maxReach = 0.30;
+    float maxReach = 0.30 * solarScale;
     float cutoff   = smoothstep(maxReach, maxReach * 0.25, dC);
     float corona1  = exp(-dC * 55.0) * 0.14 * cutoff;
     float corona2  = exp(-dC * 28.0) * 0.04 * cutoff;
@@ -329,7 +334,7 @@ void main() {
       float plFade = smoothstep(fpl, fpl + 1.0, mc - 19.0) * fPlanets;
       if (plFade < 0.001) continue;
 
-      float orbit  = 0.09 + fpl * 0.065;
+      float orbit  = (0.09 + fpl * 0.065) * solarScale;
       float speed  = 0.22 - fpl * 0.038;
       float pAngle = t * speed + fpl * 1.6;
       vec2  pPos   = solarC + vec2(cos(pAngle), sin(pAngle)) * orbit;
@@ -506,8 +511,8 @@ void main() {
 
   // ══ 8. Asteroid belt (mc 25+) ══
   if (fAsteroid > 0.001) {
-    float beltCenter  = 0.09 + 5.0 * 0.065 + 0.02;
-    float beltW       = 0.03;
+    float beltCenter  = (0.09 + 5.0 * 0.065 + 0.02) * solarScale;
+    float beltW       = 0.03 * solarScale;
     float distFromSun = length(uvA - solarC);
     float beltMask    = smoothstep(beltCenter - beltW, beltCenter - beltW * 0.3, distFromSun)
                       * (1.0 - smoothstep(beltCenter + beltW * 0.3, beltCenter + beltW, distFromSun));
@@ -519,7 +524,7 @@ void main() {
   // ══ 9. Comet (mc 30+) ══
   if (fComet > 0.001) {
     float cometT = t * 0.12;
-    float cA = 0.38, cB = 0.18;
+    float cA = 0.38 * solarScale, cB = 0.18 * solarScale;
     vec2  cometPos  = solarC + vec2(cos(cometT) * cA, sin(cometT) * cB);
     float cometDist = length(uvA - cometPos);
     // Tail away from sun
@@ -662,12 +667,18 @@ void main() {
 export default function StarField({
   messageCount = 0,
   zoomLevel = 0.4,
+  splitDir = "LR",
+  splitRatio = 0.5,
 }: StarFieldProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const msgRef = useRef(messageCount);
   const zoomRef = useRef(zoomLevel);
+  const splitDirRef = useRef(splitDir);
+  const splitRatioRef = useRef(splitRatio);
   msgRef.current = messageCount;
   zoomRef.current = zoomLevel;
+  splitDirRef.current = splitDir;
+  splitRatioRef.current = splitRatio;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -694,6 +705,7 @@ export default function StarField({
           uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
           uMsgCount:   { value: msgRef.current },
           uZoom:       { value: zoomRef.current },
+          uSolarCenter: { value: new THREE.Vector2(0.5, 0.5) },
         },
         vertexShader: VERT,
         fragmentShader: FRAG,
@@ -728,6 +740,14 @@ export default function StarField({
         u.uTime.value     = clock.getElapsedTime();
         u.uMsgCount.value = smoothMsg;
         u.uZoom.value     = smoothZoom;
+
+        // Solar center follows split divider
+        const sd = splitDirRef.current;
+        const sr = splitRatioRef.current;
+        u.uSolarCenter.value.set(
+          sd === "LR" ? sr : 0.5,
+          sd === "LR" ? 0.5 : 1.0 - sr
+        );
 
         renderer.render(scene, camera);
       };

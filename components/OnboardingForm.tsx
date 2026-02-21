@@ -3,12 +3,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { UserProfile, SimulationMode } from "@/lib/types";
-import { playTypeTick, playSwoosh } from "@/lib/sounds";
+import { playSwoosh } from "@/lib/sounds";
 
 interface OnboardingStep {
   question: string;
   field: keyof UserProfile;
-  type: "text" | "number" | "mode";
+  type: "text" | "mode";
   placeholder?: string;
 }
 
@@ -20,58 +20,16 @@ const STEPS: OnboardingStep[] = [
     placeholder: "예: 1992.04.27",
   },
   {
-    question: "태어난 시간 알아?",
-    field: "birthTime",
-    type: "text",
-    placeholder: "예: 16:34 또는 모름",
-  },
-  {
-    question: "너는 어떤 분야에서 너만의 칼을 갈아왔어?",
+    question: "어떤 일을 하고 있어?",
     field: "job",
     type: "text",
     placeholder: "직업이나 하는 일",
   },
   {
-    question: "그 칼을 얼마나 오래 갈아왔어?",
-    field: "careerYears",
-    type: "text",
-    placeholder: "예: 3년, 신입, 15년차",
-  },
-  {
-    question: "몇 살이야?",
-    field: "age",
-    type: "number",
-    placeholder: "예: 32",
-  },
-  {
-    question: "매달 네 창고에 쌓이는 숫자는 어느 정도야?",
-    field: "monthlyIncome",
-    type: "text",
-    placeholder: "예: 600만원, 200만원",
-  },
-  {
-    question: "혹시 네 발목을 잡고 있는 모래주머니 같은 게 있어? 없으면 없다고 해도 돼.",
-    field: "debt",
-    type: "text",
-    placeholder: "예: 1800만원, 없음",
-  },
-  {
-    question: "예전에 뭔가 직접 해본 적 있어? 사업이든 부업이든.",
-    field: "pastExperience",
-    type: "text",
-    placeholder: "없으면 '없음'이라고 해도 돼",
-  },
-  {
-    question: "요즘 네 머릿속을 가장 많이 차지하는 건 뭐야?",
+    question: "요즘 뭐에 관심 있어?",
     field: "interest",
     type: "text",
     placeholder: "요즘 관심사",
-  },
-  {
-    question: "네 미래에서 제일 궁금한 게 뭐야?",
-    field: "question",
-    type: "text",
-    placeholder: "미래에 대한 궁금함",
   },
   {
     question: "우주를 어떤 필터로 보고 싶어?",
@@ -93,7 +51,7 @@ export default function OnboardingForm() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<UserProfile>({
     birthday: "",
-    birthTime: "",
+    birthTime: "모름",
     job: "",
     careerYears: "",
     age: 0,
@@ -105,14 +63,8 @@ export default function OnboardingForm() {
     mode: "현실적 우주",
     learnedFacts: [],
   });
-  const [phase, setPhase] = useState<
-    "input" | "reacting" | "transitioning" | "loading"
-  >("input");
-  const [aiReaction, setAiReaction] = useState("");
-  const [displayedReaction, setDisplayedReaction] = useState("");
-  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
-  const typewriterRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const autoAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [phase, setPhase] = useState<"input" | "transitioning" | "loading">("input");
+  const inputRef = useRef<HTMLInputElement>(null);
   const [restored, setRestored] = useState(false);
 
   const totalSteps = STEPS.length;
@@ -142,28 +94,23 @@ export default function OnboardingForm() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ form, step }));
   }, [form, step, restored]);
 
-  // Browser back button → go to previous step instead of leaving page
+  // Browser back button
   useEffect(() => {
     if (!restored) return;
-
     if (phase === "input") {
       history.pushState({ onboardingStep: step }, "");
     }
-
     const handlePopState = (e: PopStateEvent) => {
       if (phase === "loading") return;
       e.preventDefault();
       if (step > 0) {
         setStep((s) => s - 1);
         setPhase("input");
-        setAiReaction("");
-        setDisplayedReaction("");
         history.pushState({ onboardingStep: step - 1 }, "");
       } else {
         history.back();
       }
     };
-
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -176,148 +123,51 @@ export default function OnboardingForm() {
     }
   }, [step, phase]);
 
-  // Cleanup timers
-  useEffect(() => {
-    return () => {
-      if (typewriterRef.current) clearInterval(typewriterRef.current);
-      if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current);
-    };
-  }, []);
-
   const canProceed = () => {
     const val = form[currentStep.field];
-    if (currentStep.type === "mode")
-      return typeof val === "string" && val.length > 0;
-    if (currentStep.type === "number")
-      return typeof val === "number" && val > 0;
+    if (currentStep.type === "mode") return typeof val === "string" && val.length > 0;
     return typeof val === "string" && val.trim().length > 0;
   };
 
-  // Typewriter effect for AI reaction
-  const startTypewriter = useCallback(
-    (text: string, onDone: () => void) => {
-      let index = 0;
-      setDisplayedReaction("");
-
-      typewriterRef.current = setInterval(() => {
-        index++;
-        setDisplayedReaction(text.substring(0, index));
-        playTypeTick();
-        if (index >= text.length) {
-          if (typewriterRef.current)
-            clearInterval(typewriterRef.current);
-          typewriterRef.current = null;
-          onDone();
-        }
-      }, 40);
-    },
-    []
-  );
-
-  // Go to previous step
   const goBack = useCallback(() => {
     if (step <= 0 || phase === "loading") return;
-    if (typewriterRef.current) {
-      clearInterval(typewriterRef.current);
-      typewriterRef.current = null;
-    }
-    if (autoAdvanceRef.current) {
-      clearTimeout(autoAdvanceRef.current);
-      autoAdvanceRef.current = null;
-    }
     setPhase("transitioning");
     playSwoosh();
     setTimeout(() => {
       setStep((s) => s - 1);
-      setAiReaction("");
-      setDisplayedReaction("");
       setPhase("input");
     }, 350);
   }, [step, phase]);
 
-  // Advance to next step
   const advanceStep = useCallback(() => {
     if (step >= totalSteps - 1) {
       setPhase("loading");
-      localStorage.setItem(
-        "parallelme-profile",
-        JSON.stringify(form)
-      );
+      localStorage.setItem("parallelme-profile", JSON.stringify(form));
       localStorage.removeItem(STORAGE_KEY);
       setTimeout(() => {
         router.push("/simulation");
       }, 2500);
       return;
     }
-
     setPhase("transitioning");
     playSwoosh();
     setTimeout(() => {
       setStep((s) => s + 1);
-      setAiReaction("");
-      setDisplayedReaction("");
       setPhase("input");
     }, 350);
   }, [step, totalSteps, form, router]);
 
-  // Submit current step
-  const submitStep = useCallback(async () => {
+  const submitStep = useCallback(() => {
     if (!canProceed() || phase !== "input") return;
-
-    const val = form[currentStep.field];
-    const userInput = String(val);
-
-    setPhase("reacting");
-
-    try {
-      const res = await fetch("/api/onboarding-react", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          step,
-          userInput,
-          collectedProfile: form,
-        }),
-      });
-
-      const data = await res.json();
-      const reaction = data.reaction || "...";
-      setAiReaction(reaction);
-
-      startTypewriter(reaction, () => {
-        // Don't auto-advance — user taps to proceed
-      });
-    } catch {
-      advanceStep();
-    }
+    advanceStep();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, currentStep, phase, step, startTypewriter, advanceStep]);
+  }, [form, currentStep, phase, advanceStep]);
 
-  // Tap to skip / advance from reaction
-  const skipToNext = useCallback(() => {
-    if (phase === "reacting") {
-      // If still typing, finish instantly
-      if (typewriterRef.current) {
-        clearInterval(typewriterRef.current);
-        typewriterRef.current = null;
-        setDisplayedReaction(aiReaction);
-        return; // First tap: show full text. Second tap: advance.
-      }
-      // Typing is done — advance to next step
-      if (autoAdvanceRef.current) {
-        clearTimeout(autoAdvanceRef.current);
-        autoAdvanceRef.current = null;
-      }
-      advanceStep();
-    }
-  }, [phase, aiReaction, advanceStep]);
-
-  // ── Loading screen (dreamy orb) ──
+  // ── Loading screen ──
   if (phase === "loading") {
     return (
       <div className="flex flex-col items-center justify-center py-20 animate-fadeIn">
         <div className="relative w-40 h-40 mb-8">
-          {/* Expanding rings */}
           <div
             className="absolute rounded-full"
             style={{
@@ -345,8 +195,6 @@ export default function OnboardingForm() {
               animation: "ringExpand 3s ease-out 2s infinite",
             }}
           />
-
-          {/* Core orb */}
           <div
             className="absolute rounded-full"
             style={{
@@ -358,8 +206,6 @@ export default function OnboardingForm() {
               animation: "orbFloat 3s ease-in-out infinite",
             }}
           />
-
-          {/* Light rays */}
           {[0, 30, 60, 90, 120, 150].map((deg) => (
             <div
               key={deg}
@@ -370,8 +216,7 @@ export default function OnboardingForm() {
                 width: `${60 + Math.random() * 40}px`,
                 height: "1px",
                 transform: `translate(-50%, -50%) rotate(${deg}deg)`,
-                background:
-                  "linear-gradient(to right, transparent, rgba(212,168,83,0.3), transparent)",
+                background: "linear-gradient(to right, transparent, rgba(212,168,83,0.3), transparent)",
                 animation: `fadeIn ${1 + Math.random()}s ease-out ${0.3 + deg * 0.01}s both`,
               }}
             />
@@ -391,10 +236,7 @@ export default function OnboardingForm() {
   }
 
   return (
-    <div
-      className="w-full max-w-lg mx-auto px-4"
-      onClick={phase === "reacting" ? skipToNext : undefined}
-    >
+    <div className="w-full max-w-lg mx-auto px-4">
       {/* Back button */}
       {step > 0 && phase === "input" && (
         <button
@@ -443,7 +285,7 @@ export default function OnboardingForm() {
         ))}
       </div>
 
-      {/* Question + Input area — dreamy transitions */}
+      {/* Question + Input */}
       <div
         key={step}
         className={
@@ -452,7 +294,6 @@ export default function OnboardingForm() {
             : "animate-dreamyReveal"
         }
       >
-        {/* Question text with glow */}
         <h2
           className="text-2xl md:text-3xl font-medium text-center mb-10 leading-relaxed"
           style={{
@@ -464,19 +305,16 @@ export default function OnboardingForm() {
           {currentStep.question}
         </h2>
 
-        {/* Text input — ethereal underline */}
+        {/* Text input */}
         {phase === "input" && currentStep.type === "text" && (
           <div className="flex justify-center">
             <div className="relative w-full max-w-sm">
               <input
-                ref={inputRef as React.RefObject<HTMLInputElement>}
+                ref={inputRef}
                 type="text"
                 value={form[currentStep.field] as string}
                 onChange={(e) =>
-                  setForm({
-                    ...form,
-                    [currentStep.field]: e.target.value,
-                  })
+                  setForm({ ...form, [currentStep.field]: e.target.value })
                 }
                 placeholder={currentStep.placeholder}
                 autoFocus
@@ -501,7 +339,6 @@ export default function OnboardingForm() {
                   }
                 }}
               />
-              {/* Glow line under input */}
               <div
                 className="absolute bottom-0 left-1/2 -translate-x-1/2 h-px transition-all duration-700"
                 style={{
@@ -514,57 +351,7 @@ export default function OnboardingForm() {
           </div>
         )}
 
-        {/* Number input (age) — ethereal underline */}
-        {phase === "input" && currentStep.type === "number" && (
-          <div className="flex justify-center">
-            <div className="relative w-full max-w-sm">
-              <input
-                ref={inputRef as React.RefObject<HTMLInputElement>}
-                type="number"
-                inputMode="numeric"
-                value={form[currentStep.field] === 0 ? "" : String(form[currentStep.field])}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    [currentStep.field]: parseInt(e.target.value) || 0,
-                  })
-                }
-                placeholder={currentStep.placeholder}
-                autoFocus
-                className="w-full text-center text-xl bg-transparent border-b-2 pb-3 outline-none transition-all duration-500 placeholder:text-white/15"
-                style={{
-                  color: "rgba(255, 255, 255, 0.9)",
-                  borderColor: "rgba(212, 168, 83, 0.2)",
-                  caretColor: "#d4a853",
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = "rgba(212, 168, 83, 0.5)";
-                  e.currentTarget.style.boxShadow = "0 4px 20px -4px rgba(212, 168, 83, 0.15)";
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = "rgba(212, 168, 83, 0.2)";
-                  e.currentTarget.style.boxShadow = "none";
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    submitStep();
-                  }
-                }}
-              />
-              <div
-                className="absolute bottom-0 left-1/2 -translate-x-1/2 h-px transition-all duration-700"
-                style={{
-                  width: form[currentStep.field] !== 0 ? "100%" : "0%",
-                  background: "linear-gradient(to right, transparent, rgba(212,168,83,0.4), rgba(179,136,255,0.3), transparent)",
-                  boxShadow: "0 0 12px rgba(212,168,83,0.2)",
-                }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Mode select — glassmorphism cards */}
+        {/* Mode select */}
         {phase === "input" && currentStep.type === "mode" && (
           <div className="space-y-3 max-w-sm mx-auto">
             {MODES.map((m, idx) => (
@@ -579,10 +366,7 @@ export default function OnboardingForm() {
                       JSON.stringify({ ...form, mode: m.value })
                     );
                     localStorage.removeItem(STORAGE_KEY);
-                    setTimeout(
-                      () => router.push("/simulation"),
-                      2500
-                    );
+                    setTimeout(() => router.push("/simulation"), 2500);
                   }, 100);
                 }}
                 className="w-full flex flex-col items-center gap-1.5 px-5 py-5 rounded-2xl transition-all duration-500 animate-borderGlow"
@@ -629,7 +413,7 @@ export default function OnboardingForm() {
           </div>
         )}
 
-        {/* Confirm button — golden glow */}
+        {/* Confirm button */}
         {phase === "input" && currentStep.type !== "mode" && (
           <div className="flex justify-center mt-8">
             <button
@@ -667,61 +451,6 @@ export default function OnboardingForm() {
             >
               확인
             </button>
-          </div>
-        )}
-
-        {/* AI Reaction — loading dots then glowing text */}
-        {phase === "reacting" && !aiReaction && (
-          <div className="flex justify-center mt-8 animate-fadeIn">
-            <div className="flex gap-1.5">
-              {[0, 150, 300].map((delay) => (
-                <div
-                  key={delay}
-                  className="w-2 h-2 rounded-full animate-bounce"
-                  style={{
-                    background: "rgba(212,168,83,0.6)",
-                    animationDelay: `${delay}ms`,
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-        {phase === "reacting" && aiReaction && (
-          <div className="flex justify-center mt-8 animate-fadeIn">
-            <p
-              className="text-center text-lg leading-relaxed max-w-sm animate-glowPulse"
-              style={{
-                color: "#d4a853",
-                fontFamily: "var(--font-display), serif",
-                minHeight: "2em",
-                textShadow: "0 0 20px rgba(212,168,83,0.4), 0 0 40px rgba(179,136,255,0.15)",
-              }}
-            >
-              {displayedReaction}
-              {displayedReaction.length < aiReaction.length && (
-                <span
-                  className="inline-block w-0.5 h-5 ml-0.5 animate-pulse"
-                  style={{
-                    background: "linear-gradient(to bottom, #d4a853, rgba(179,136,255,0.5))",
-                    verticalAlign: "text-bottom",
-                    boxShadow: "0 0 8px rgba(212,168,83,0.6)",
-                  }}
-                />
-              )}
-            </p>
-          </div>
-        )}
-
-        {/* Tap to continue hint */}
-        {phase === "reacting" && displayedReaction === aiReaction && (
-          <div className="flex justify-center mt-6 animate-fadeIn">
-            <span
-              className="text-[11px] animate-pulse"
-              style={{ color: "rgba(255,255,255,0.2)" }}
-            >
-              터치하면 다음으로
-            </span>
           </div>
         )}
       </div>

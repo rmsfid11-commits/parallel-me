@@ -103,12 +103,17 @@ ${astrologyText}
 ${sajuHint}
 
 ## 사용자 정보
-- 직업: ${profile.job} / 경력: ${profile.careerYears} / 나이: ${profile.age}세
-- 월수입: ${profile.monthlyIncome} / 부채: ${profile.debt}
-- 과거 경험: ${profile.pastExperience}
-- 관심사: ${profile.interest}
-- 가장 궁금한 것: ${profile.question}
-- 시뮬레이션 모드: ${profile.mode}
+${[
+    profile.job && `- 직업: ${profile.job}`,
+    profile.careerYears && `- 경력: ${profile.careerYears}`,
+    profile.age && `- 나이: ${profile.age}세`,
+    profile.monthlyIncome && `- 월수입: ${profile.monthlyIncome}`,
+    profile.debt && `- 부채: ${profile.debt}`,
+    profile.pastExperience && `- 과거 경험: ${profile.pastExperience}`,
+    profile.interest && `- 관심사: ${profile.interest}`,
+    profile.question && `- 가장 궁금한 것: ${profile.question}`,
+    `- 시뮬레이션 모드: ${profile.mode}`,
+  ].filter(Boolean).join('\n')}
 ${learnedSection}
 
 ## 대화 방식 (엄격히 지킬 것)

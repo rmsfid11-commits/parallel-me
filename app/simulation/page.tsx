@@ -267,16 +267,18 @@ function SessionDrawer({
                       · {s.msgCount}개 메시지
                     </p>
                   </button>
-                  {/* Delete (only non-active, and more than 1 session) */}
-                  {!isActive && sessions.length > 1 && (
+                  {/* Delete session */}
+                  {sessions.length > 1 && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onDeleteSession(s.id);
+                        if (confirm("이 세션을 삭제할까?")) {
+                          onDeleteSession(s.id);
+                        }
                       }}
-                      className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                       style={{
-                        background: "rgba(255,80,80,0.15)",
+                        background: isActive ? "rgba(255,80,80,0.25)" : "rgba(255,80,80,0.15)",
                         color: "rgba(255,80,80,0.7)",
                         fontSize: "11px",
                       }}
@@ -332,7 +334,7 @@ function SimulationCanvas() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   // Split layout
-  const [splitDir, setSplitDir] = useState<"LR" | "TB">("LR");
+  const [splitDir, setSplitDir] = useState<"LR" | "TB">("TB");
   const [splitRatio, setSplitRatio] = useState(0.5);
   const [splitSwapped, setSplitSwapped] = useState(false);
   const isDraggingSplit = useRef(false);
@@ -373,6 +375,16 @@ function SimulationCanvas() {
       window.removeEventListener("keydown", initAudio);
       stopAmbient();
     };
+  }, []);
+
+  // ── Mobile detection — default TB + compact ratio on phone ──
+  useEffect(() => {
+    const w = window.innerWidth;
+    if (w >= 768) {
+      setSplitDir("LR");
+    } else {
+      setSplitRatio(0.35);
+    }
   }, []);
 
   // ── Load profile + sessions ──
@@ -1139,10 +1151,18 @@ function SimulationCanvas() {
 
   const handleDeleteSession = useCallback(
     (sessionId: string) => {
-      if (sessionId === activeSessionId || sessions.length <= 1) return;
+      if (sessions.length <= 1) return;
+      if (sessionId === activeSessionId) {
+        const other = sessions.find(s => s.id !== sessionId);
+        if (!other) return;
+        setActiveSessionId(other.id);
+        setTimelines(other.timelines);
+        setActiveTimelineId(other.activeTimelineId || other.timelines[0]?.id || "");
+        hasStartedRef.current = other.timelines.some(t => t.messages.length > 0);
+      }
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
     },
-    [activeSessionId, sessions.length]
+    [activeSessionId, sessions]
   );
 
   // ── Split divider drag ──
