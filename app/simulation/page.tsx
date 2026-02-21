@@ -1392,29 +1392,42 @@ function SimulationCanvas() {
           )}
         </div>
 
-        {/* Divider */}
+        {/* Divider — wide touch target */}
         <div
           onPointerDown={handleSplitPointerDown}
           style={{
-            [isLR ? "width" : "height"]: "6px",
+            [isLR ? "width" : "height"]: "24px",
             cursor: isLR ? "col-resize" : "row-resize",
-            background: "rgba(212,168,83,0.08)",
+            background: "transparent",
             flexShrink: 0,
             position: "relative",
             zIndex: 5,
             touchAction: "none",
           }}
         >
+          {/* Visible bar */}
           <div
             style={{
               position: "absolute",
-              [isLR ? "top" : "left"]: "50%",
               [isLR ? "left" : "top"]: "50%",
+              [isLR ? "top" : "left"]: "0",
+              [isLR ? "width" : "height"]: "4px",
+              [isLR ? "height" : "width"]: "100%",
+              transform: isLR ? "translateX(-50%)" : "translateY(-50%)",
+              background: "rgba(212,168,83,0.12)",
+            }}
+          />
+          {/* Handle grip */}
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
               transform: "translate(-50%, -50%)",
-              [isLR ? "width" : "height"]: "2px",
-              [isLR ? "height" : "width"]: "24px",
-              borderRadius: "1px",
-              background: "rgba(212,168,83,0.35)",
+              [isLR ? "width" : "height"]: "4px",
+              [isLR ? "height" : "width"]: "36px",
+              borderRadius: "2px",
+              background: "rgba(212,168,83,0.45)",
             }}
           />
         </div>
