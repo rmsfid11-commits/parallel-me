@@ -20,76 +20,76 @@
 
 ---
 
-## 브랜드 에센스
-**"나를 기억하는 AI와 함께 미래를 그려나간다"**
+## 프로젝트 개요
+AI 기반 인생 시뮬레이션 앱. 사주 + AI 대화로 미래를 탐색하는 "우주맵" 생성.
+타겟: 한국 20~40대, 모바일 퍼스트.
 
-사용자가 AI와 대화하면서 스스로 미래를 발견하는 앱.
+**브랜드 에센스**: "나를 기억하는 AI와 함께 미래를 그려나간다"
 AI가 답을 주는 게 아니라, 대화할수록 이 사람을 더 깊이 알아가면서
-"어어어?? 내 사주가?? 그럼 5년 뒤에 파이어?? 스마트팜을 섞으면?!" 같은
 발견의 순간을 연속으로 만들어내는 것이 목표.
 
 ## 기술 스택
-- **Frontend**: Next.js (App Router), React, TypeScript, TailwindCSS
+- **Frontend**: Next.js 14 (App Router), React, TypeScript, TailwindCSS
 - **AI**: Google Gemini API (gemini-2.5-flash-lite)
-- **시각화**: ReactFlow (@xyflow/react) — 분기 우주지도
-- **배포**: Vercel
+- **시각화**: ReactFlow (@xyflow/react) — 분기 우주지도, Three.js — 배경 우주
+- **저장**: localStorage (세션, 프로필, learnedFacts)
+- **배포**: Vercel (`npx vercel --prod`)
 
-## 프로젝트 구조
+## 핵심 명령어
 ```
-src/
-  app/
-    page.tsx              # 랜딩 페이지
-    onboarding/page.tsx   # 온보딩 (생년월일, 직업, 수입 등 수집)
-    simulation/page.tsx   # 메인 채팅 + 우주지도
-    api/
-      onboarding/route.ts # 온보딩 반응 생성
-      chat/route.ts       # 메인 채팅 응답
-      report/route.ts     # 우주 분석 리포트
-  components/
-    CosmicCanvas.tsx      # 배경 우주 효과
-    StarField.tsx         # 별 렌더링
-    LandingContent.tsx    # 랜딩 컨텐츠
-    OnboardingForm.tsx    # 온보딩 폼
-    ChatPanel.tsx         # 채팅 UI
-    ParallelNode.tsx      # 우주지도 노드
-    BranchChoices.tsx     # 분기 선택지 UI
-  lib/
-    types.ts              # 타입 정의
-    gemini.ts             # Gemini API 함수들
-    astrology.ts          # 사주 계산 (computeAllAstrology)
+npm run dev        # 로컬 개발 서버
+npm run build      # 프로덕션 빌드
+npx tsc --noEmit   # 타입 체크
+npx vercel --prod  # 프로덕션 배포
 ```
 
-## 핵심 타입
-```typescript
-UserProfile {
-  birthday, birthTime, job, careerYears, age,
-  monthlyIncome, debt, pastExperience, interest, question,
-  mode: "희망적 우주" | "현실적 우주" | "최악의 우주",
-  learnedFacts?: string[]  // 대화하면서 쌓이는 기억들 ← 핵심!
-}
+## 디렉토리 구조
 ```
+app/
+  page.tsx                  # 랜딩 페이지
+  onboarding/page.tsx       # 온보딩 (4단계: 생년월일→직업→관심사→모드)
+  simulation/page.tsx       # 메인 — 채팅 + 우주지도 + 세션관리
+  api/
+    chat/route.ts           # 메인 채팅 응답
+    onboarding-react/route.ts # (사용 안 함, 레거시)
+    report/route.ts         # 우주 분석 리포트
+    suggest/route.ts        # 대화 추천
+components/
+  StarField.tsx             # Three.js WebGL 우주 배경 (15단계 진화)
+  OnboardingForm.tsx        # 온보딩 폼 (4스텝, AI 리액션 없음)
+  ChatPanel.tsx             # 채팅 UI (타이핑 애니메이션, 추천)
+  ChatMessage.tsx           # 개별 메시지 렌더링
+  BranchChoices.tsx         # 분기 선택지 버튼
+  ScenarioNode.tsx          # ReactFlow 노드 (분기점/대화)
+  ForkEffect.tsx            # 분기 시각 효과
+lib/
+  gemini.ts                 # Gemini 프롬프트 빌더 + 응답 파서
+  astrology.ts              # 사주 계산 (만세력 기반, 코드로 정확하게)
+  types.ts                  # UserProfile, ChatMessage, Timeline 등
+  layout.ts                 # ReactFlow 레이아웃 (dagre)
+  sounds.ts                 # 사운드 효과
+```
+
+## 코드 규칙
+- 모든 컴포넌트: 함수형 + hooks
+- 컴포넌트명: PascalCase, 파일명도 PascalCase (기존 패턴 유지)
+- API 키: .env.local 관리, 하드코딩 금지
+- import 순서: React → 외부 라이브러리 → 내부 모듈
 
 ## AI 동작 방식
-- **온보딩**: 각 질문마다 사주/수비학/마야달력 등 다른 렌즈로 1-2줄 반응
 - **채팅**: 유저가 말할수록 더 깊이 알아가는 대화형 시뮬레이션
-  - 4카테고리 리포트 방식 X
-  - 유저 스스로 발견하게 만드는 방식 O
-  - 중요한 갈림길에서 분기점(BRANCH_POINT) 제시
-- **learnedFacts**: 대화 중 유저가 말한 새 정보를 누적 → 다음 대화에 반영
+- **learnedFacts**: 매 턴마다 `---LEARNED_FACTS---` 마커로 새 정보 추출 → profile에 누적
+- **분기점**: `---BRANCH_POINT---` 마커로 중요한 갈림길 제시 (3-5턴에 1번)
+- **톤**: 반말, 담담, 이모지 금지, 2-3줄 골든존
 
 ## 디자인 컨셉
 - 배경: 순수 블랙 (#000000)
 - 골드 (#d4a853) + 퍼플 (#b388ff) 액센트
 - 글로우, 블러, 별 트윙클 애니메이션
-- 담담하고 신비로운 톤 — 호들갑 금지, 이모지 금지 (AI 응답 내)
-
-## 현재 작업 방향
-- 자동 시나리오 방식(StoryScenario) 제거 완료
-- 채팅이 메인 플로우
-- learnedFacts를 통한 메모리 레이어 구축 중
-- 유저가 채팅에서 새 정보 말하면 profile.learnedFacts에 누적되도록 수정 필요
+- 모바일: 기본 상하(TB) 분할, 35:65 비율
 
 ## 주의사항
-- 사주 계산은 astrology.ts에서 코드로 정확하게 계산 (AI 즉흥 금지)
+- 사주 계산은 astrology.ts에서 코드로 정확하게 (AI 즉흥 금지)
 - 반말, 담담한 톤 유지
 - 한국어 전용 앱
+- StarField.tsx 수정 시 GLSL 셰이더 문법 주의
