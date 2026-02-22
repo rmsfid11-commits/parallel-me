@@ -295,7 +295,7 @@ export default function OnboardingForm() {
         }
       >
         <h2
-          className="text-2xl md:text-3xl font-medium text-center mb-10 leading-relaxed"
+          className="text-2xl md:text-3xl font-medium text-center mb-4 leading-relaxed"
           style={{
             color: "rgba(255, 255, 255, 0.92)",
             fontFamily: "var(--font-display), serif",
@@ -304,6 +304,19 @@ export default function OnboardingForm() {
         >
           {currentStep.question}
         </h2>
+
+        {/* Context description added below the headline */}
+        <p
+          className="text-center text-sm md:text-base mb-10 text-white/40 font-light"
+          style={{
+            textShadow: "0 0 10px rgba(255,255,255,0.05)",
+          }}
+        >
+          {step === 0 && "다중우주 궤도를 계산하기 위해 당신의 현재 기준점이 필요해요."}
+          {step === 1 && "당신의 직무 데이터를 기반으로 다른 차원의 역할을 시뮬레이션 합니다."}
+          {step === 2 && "관심사의 흐름을 추적하여 다른 우주의 가능성을 예측합니다."}
+          {step === 3 && "어떤 분위기의 평행우주를 체험해보고 싶으신가요?"}
+        </p>
 
         {/* Text input */}
         {phase === "input" && currentStep.type === "text" && (
