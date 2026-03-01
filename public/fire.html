@@ -1,0 +1,2125 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Fire Diary</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500&family=Noto+Serif+KR:wght@300;400&family=JetBrains+Mono:wght@400&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #E6DFC6;
+            --paper: #F0E8D0;
+            --card: rgba(253, 248, 234, 0.93);
+            --card-solid: #F8F2E0;
+            --border: rgba(188, 174, 144, 0.6);
+            --border-solid: #BEAA88;
+            --ink: #211A0C;
+            --ink2: #3E3220;
+            --muted: #524636;
+            --muted2: #7A6C54;
+            --faint: rgba(210, 198, 168, 0.35);
+            --accent: #7A4F38;
+            --accent2: #3A5670;
+            --accent3: #426852;
+            --yellow: #8A6820;
+            --sage: #6A8870;
+            --purple: #5A3870;
+            --teal: #2A6870;
+            --header-h: 50px;
+            --nav-h: 60px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg);
+            background-image:
+                radial-gradient(ellipse 80% 50% at 88% 4%, rgba(255, 240, 185, 0.5) 0%, transparent 52%),
+                radial-gradient(ellipse 45% 55% at 6% 96%, rgba(165, 148, 95, 0.16) 0%, transparent 50%),
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+            color: var(--ink);
+            font-family: 'Noto Sans KR', sans-serif;
+            font-weight: 400;
+            height: 100dvh;
+            overflow: hidden;
+            font-size: 14px;
+            letter-spacing: 0.01em;
+        }
+
+        /* 점 격자 레이어 (모바일 최적화) */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background-image: radial-gradient(circle, rgba(120, 95, 52, 0.2) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+
+        /* ── 철학 배너 접기 ── */
+        .philosophy-wrap { margin-bottom: 22px; position: relative; z-index: 1; }
+        .philosophy-toggle {
+            width: 100%; background: rgba(26,19,8,0.91);
+            border: none; border-radius: 3px; padding: 14px 20px;
+            display: flex; align-items: center; justify-content: space-between;
+            font-family: 'Noto Sans KR', sans-serif; font-size: 10px; font-weight: 400;
+            letter-spacing: 0.22em; text-transform: uppercase; cursor: pointer;
+            color: rgba(255,255,255,0.5);
+            box-shadow: 0 4px 20px rgba(18,10,0,0.2); transition: border-radius 0.2s;
+        }
+        .philosophy-toggle.open { border-radius: 3px 3px 0 0; }
+        .phil-arrow { transition: transform 0.25s; display: inline-block; }
+        .philosophy-toggle.open .phil-arrow { transform: rotate(180deg); }
+        .philosophy-body { overflow: hidden; max-height: 0; transition: max-height 0.32s cubic-bezier(0.4,0,0.2,1); }
+        .philosophy-body.open { max-height: 600px; }
+        .philosophy-body .compare-banner { border-radius: 0 0 3px 3px; margin-bottom: 0; }
+        /* ── ETF 요약 접기 ── */
+        .etf-summary, .etf-tags { display: none; }
+        .etf-more { font-size: 9px; color: var(--muted2); letter-spacing: 0.12em; margin-top: 8px; }
+        .etf-card.expanded .etf-summary { display: block; }
+        .etf-card.expanded .etf-tags { display: flex; }
+        .etf-card.expanded .etf-more { display: none; }
+        /* ── 헤더 ── */
+        .app-header {
+            height: var(--header-h);
+            z-index: 100;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(224, 215, 192, 0.9);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border-bottom: 1px solid var(--border);
+            box-shadow: 0 1px 0 rgba(255, 248, 224, 0.65) inset;
+            display: flex;
+            align-items: center;
+            padding: 0 22px;
+        }
+
+        .app-title {
+            font-size: 12px;
+            font-weight: 400;
+            letter-spacing: 0.24em;
+            text-transform: uppercase;
+            color: var(--ink);
+        }
+
+        .header-right {
+            margin-left: auto;
+            font-size: 9px;
+            color: var(--muted);
+            letter-spacing: 0.15em;
+        }
+
+        /* ── 바텀 탭 ── */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: var(--nav-h);
+            z-index: 100;
+            background: rgba(224, 215, 192, 0.92);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid var(--border);
+            box-shadow: 0 1px 0 rgba(255, 248, 224, 0.55) inset;
+            display: flex;
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        .bnav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: none;
+            background: none;
+            color: var(--muted2);
+            outline: none;
+            font-family: 'Noto Sans KR', sans-serif;
+            position: relative;
+            transition: color 0.2s;
+        }
+
+        .bnav-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 28%;
+            right: 28%;
+            height: 1px;
+            background: var(--sage);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .bnav-item.active {
+            color: var(--ink);
+        }
+
+        .bnav-item.active::before {
+            opacity: 1;
+        }
+
+        .bnav-label {
+            font-size: 10px;
+            font-weight: 400;
+            letter-spacing: 0.08em;
+        }
+
+        /* ── 콘텐츠 ── */
+        .content {
+            position: fixed;
+            top: var(--header-h);
+            left: 0;
+            right: 0;
+            bottom: var(--nav-h);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            z-index: 1;
+        }
+
+        .content::-webkit-scrollbar {
+            display: none;
+        }
+
+        .section-inner {
+            padding: 24px 18px 44px;
+            max-width: 560px;
+            margin: 0 auto;
+        }
+
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        #tab-ai {
+            display: none;
+            flex-direction: column;
+            position: fixed;
+            top: var(--header-h);
+            left: 0;
+            right: 0;
+            bottom: var(--nav-h);
+            z-index: 1;
+        }
+
+        #tab-ai.active {
+            display: flex;
+        }
+
+        /* ── 섹션 제목 ── */
+        .section-title {
+            font-size: 9px;
+            font-weight: 400;
+            letter-spacing: 0.28em;
+            color: var(--muted);
+            text-transform: uppercase;
+            margin-bottom: 20px;
+        }
+
+        /* ── 공통 카드 ── */
+        .card {
+            background: var(--card);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            padding: 20px;
+            margin-bottom: 12px;
+            box-shadow: 0 1px 0 rgba(255, 250, 228, 0.88) inset, 0 -0.5px 0 rgba(130, 105, 55, 0.07) inset, 0 2px 12px rgba(55, 38, 8, 0.07), 0 6px 28px rgba(55, 38, 8, 0.04);
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ── 배지 ── */
+        .badge {
+            display: inline-block;
+            font-size: 9px;
+            font-weight: 400;
+            padding: 2px 7px;
+            letter-spacing: 0.08em;
+            border: 1px solid;
+            border-radius: 1px;
+        }
+
+        .badge-cash {
+            color: var(--accent);
+            border-color: rgba(122, 79, 56, 0.4);
+            background: rgba(122, 79, 56, 0.07);
+        }
+
+        .badge-growth {
+            color: var(--accent2);
+            border-color: rgba(58, 86, 112, 0.4);
+            background: rgba(58, 86, 112, 0.07);
+        }
+
+        .badge-blend {
+            color: var(--purple);
+            border-color: rgba(90, 56, 112, 0.4);
+            background: rgba(90, 56, 112, 0.07);
+        }
+
+        .badge-bond {
+            color: var(--teal);
+            border-color: rgba(42, 104, 112, 0.4);
+            background: rgba(42, 104, 112, 0.07);
+        }
+
+        .badge-sector {
+            color: var(--yellow);
+            border-color: rgba(138, 104, 32, 0.4);
+            background: rgba(138, 104, 32, 0.07);
+        }
+
+        .badge-leverage {
+            color: #8A2020;
+            border-color: rgba(138, 32, 32, 0.4);
+            background: rgba(138, 32, 32, 0.07);
+        }
+
+        .badge-crypto {
+            color: var(--purple);
+            border-color: rgba(90, 56, 112, 0.4);
+            background: rgba(90, 56, 112, 0.07);
+        }
+
+        /* ── 필터 ── */
+        .filter-wrap {
+            margin-bottom: 22px;
+        }
+
+        .filter-label {
+            font-size: 9px;
+            font-weight: 400;
+            color: var(--muted);
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 6px;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            margin-bottom: 10px;
+            padding-bottom: 2px;
+        }
+        .filter-row::-webkit-scrollbar { display: none;
+        }
+
+        .filter-btn {
+            padding: 9px 14px;
+            border: 1px solid var(--border-solid);
+            border-radius: 2px;
+            background: transparent;
+            font-size: 12px;
+            font-weight: 400;
+            cursor: pointer;
+            color: var(--muted);
+            letter-spacing: 0.03em;
+            font-family: 'Noto Sans KR', sans-serif;
+            transition: all 0.15s;
+            min-height: 40px;
+        }
+
+        .filter-btn.active {
+            background: var(--ink);
+            color: var(--paper);
+            border-color: var(--ink);
+        }
+
+        /* ── 검색 ── */
+        .search-box {
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid var(--border-solid);
+            border-radius: 0;
+            padding: 10px 0;
+            font-size: 13px;
+            color: var(--ink);
+            outline: none;
+            margin-bottom: 22px;
+            font-family: 'Noto Sans KR', sans-serif;
+            font-weight: 300;
+            transition: border-color 0.2s;
+        }
+
+        .search-box:focus {
+            border-bottom-color: var(--ink);
+        }
+
+        .search-box::placeholder {
+            color: var(--muted2);
+        }
+
+        .etf-count {
+            font-size: 10px;
+            color: var(--muted);
+            margin-bottom: 14px;
+            letter-spacing: 0.1em;
+        }
+
+        /* ── ETF 카드 ── */
+        .etf-grid {
+            display: grid;
+            gap: 0;
+        }
+
+        .etf-card {
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            padding: 20px 0 20px 18px;
+            border-top: 1px solid rgba(188, 174, 144, 0.4);
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        .etf-card:last-child {
+            border-bottom: 1px solid rgba(188, 174, 144, 0.4);
+        }
+
+        .etf-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 20%;
+            bottom: 20%;
+            width: 2px;
+            border-radius: 1px;
+        }
+
+        .etf-card.cash::before {
+            background: var(--accent);
+        }
+
+        .etf-card.growth::before {
+            background: var(--accent2);
+        }
+
+        .etf-card.blend::before {
+            background: var(--purple);
+        }
+
+        .etf-card.bond::before {
+            background: var(--teal);
+        }
+
+        .etf-card.sector::before {
+            background: var(--yellow);
+        }
+
+        .etf-card.leverage::before {
+            background: #8A2020;
+        }
+
+        .etf-card.crypto::before {
+            background: var(--purple);
+        }
+
+        .etf-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            gap: 10px;
+        }
+
+        .etf-ticker {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 24px;
+            font-weight: 400;
+            letter-spacing: 0.02em;
+            line-height: 1;
+            color: var(--ink);
+        }
+
+        .etf-name {
+            font-size: 10px;
+            color: var(--muted);
+            margin-top: 5px;
+            line-height: 1.5;
+            font-weight: 300;
+            letter-spacing: 0.03em;
+        }
+
+        .etf-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            margin: 12px 0;
+        }
+
+        .etf-stats>div:first-child .stat-val {
+            font-size: 22px;
+            color: var(--accent);
+            letter-spacing: -0.01em;
+            line-height: 1.1;
+        }
+
+        .stat-label {
+            font-size: 8px;
+            color: var(--muted);
+            margin-bottom: 3px;
+            font-weight: 400;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+        }
+
+        .stat-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 400;
+            color: var(--ink2);
+        }
+
+        .etf-summary {
+            font-size: 12px;
+            color: var(--ink2);
+            line-height: 1.88;
+            padding-top: 12px;
+            border-top: 1px solid rgba(188, 174, 144, 0.35);
+            font-weight: 300;
+        }
+
+        .etf-tags {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            margin-top: 9px;
+        }
+
+        .etf-tag {
+            font-size: 9px;
+            padding: 2px 8px;
+            border: 1px solid rgba(188, 174, 144, 0.55);
+            color: var(--muted);
+            letter-spacing: 0.05em;
+            border-radius: 1px;
+        }
+
+        /* ── 비교 배너 ── */
+        .compare-banner {
+            background: rgba(26, 19, 8, 0.92);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 3px;
+            padding: 22px;
+            margin-bottom: 22px;
+            box-shadow: 0 4px 24px rgba(18, 10, 0, 0.22), 0 1px 0 rgba(255, 238, 185, 0.07) inset;
+            position: relative;
+            z-index: 1;
+        }
+
+        .compare-title {
+            font-size: 9px;
+            font-weight: 400;
+            letter-spacing: 0.28em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.3);
+            margin-bottom: 18px;
+        }
+
+        .compare-grid {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 12px;
+            align-items: start;
+        }
+
+        .compare-label {
+            font-size: 11px;
+            font-weight: 400;
+            margin-bottom: 10px;
+            letter-spacing: 0.05em;
+        }
+
+        .compare-left .compare-label {
+            color: #C49080;
+        }
+
+        .compare-right .compare-label {
+            color: #8AA8C4;
+        }
+
+        .compare-points {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.32);
+            line-height: 2.2;
+            font-weight: 300;
+        }
+
+        .compare-vs {
+            font-size: 13px;
+            font-weight: 300;
+            color: rgba(255, 255, 255, 0.18);
+            text-align: center;
+            padding-top: 18px;
+            letter-spacing: 0.15em;
+        }
+
+        .compare-tip {
+            margin-top: 18px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.07);
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.28);
+            line-height: 2.1;
+            font-weight: 300;
+        }
+
+        /* ── 투자 일기 ── */
+        .diary-form-header {
+            margin-bottom: 20px;
+        }
+
+        .diary-form-date {
+            font-family: 'Noto Serif KR', serif;
+            font-size: 18px;
+            font-weight: 300;
+            color: var(--ink);
+            letter-spacing: 0.04em;
+            margin-bottom: 4px;
+        }
+
+        .diary-form-day {
+            font-size: 10px;
+            color: var(--muted);
+            letter-spacing: 0.15em;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            margin-bottom: 18px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 9px;
+            font-weight: 400;
+            color: var(--muted);
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid var(--border-solid);
+            border-radius: 0;
+            padding: 8px 0;
+            font-family: 'Noto Sans KR', sans-serif;
+            font-size: 13px;
+            color: var(--ink);
+            outline: none;
+            font-weight: 300;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            border-bottom-color: var(--ink);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+            font-family: 'Noto Serif KR', serif;
+            font-size: 13px;
+            line-height: 1.85;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        .save-btn {
+            width: 100%;
+            padding: 14px;
+            background: var(--ink);
+            color: var(--paper);
+            border: none;
+            border-radius: 1px;
+            font-size: 10px;
+            font-weight: 400;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            cursor: pointer;
+            font-family: 'Noto Sans KR', sans-serif;
+            margin-top: 8px;
+            transition: background 0.2s;
+            box-shadow: 0 2px 10px rgba(18, 10, 0, 0.2);
+        }
+
+        .save-btn:hover {
+            background: var(--accent);
+        }
+
+        .cancel-btn {
+            width: 100%;
+            padding: 10px;
+            background: transparent;
+            color: var(--muted);
+            border: 1px solid var(--border-solid);
+            border-radius: 1px;
+            font-size: 10px;
+            font-weight: 400;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            cursor: pointer;
+            font-family: 'Noto Sans KR', sans-serif;
+            margin-top: 6px;
+            display: none;
+        }
+
+        /* 일기 항목 */
+        .diary-list {
+            display: grid;
+            gap: 0;
+            margin-top: 8px;
+        }
+
+        .diary-item {
+            border-top: 1px solid rgba(188, 174, 144, 0.35);
+            padding: 18px 0;
+            position: relative;
+            animation: fadeUp 0.25s ease;
+            z-index: 1;
+        }
+
+        .diary-item:last-child {
+            border-bottom: 1px solid rgba(188, 174, 144, 0.35);
+        }
+
+        .diary-item.editing {
+            background: rgba(200, 188, 158, 0.18);
+            padding: 18px 14px;
+            border-radius: 2px;
+        }
+
+        .diary-item-date {
+            font-size: 9px;
+            color: var(--muted);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .diary-item-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 8px;
+        }
+
+        .diary-ticker {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 18px;
+            font-weight: 400;
+            color: var(--ink);
+        }
+
+        .diary-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .edit-btn,
+        .del-btn {
+            background: none;
+            border: none;
+            font-size: 10px;
+            cursor: pointer;
+            color: var(--muted2);
+            letter-spacing: 0.08em;
+            font-family: 'Noto Sans KR', sans-serif;
+            padding: 0;
+            transition: color 0.15s;
+        }
+
+        .edit-btn:hover {
+            color: var(--ink);
+        }
+
+        .del-btn:hover {
+            color: var(--accent);
+        }
+
+        .diary-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 11px;
+            color: var(--muted);
+            margin-bottom: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 0.04em;
+        }
+
+        .diary-note {
+            font-size: 13px;
+            color: var(--ink2);
+            font-family: 'Noto Serif KR', serif;
+            font-weight: 300;
+            line-height: 28px;
+            background-image: repeating-linear-gradient(transparent, transparent 27px, rgba(160, 140, 95, 0.15) 27px, rgba(160, 140, 95, 0.15) 28px);
+            padding-top: 2px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 64px 20px;
+            color: var(--muted);
+            font-size: 12px;
+            letter-spacing: 0.1em;
+            font-weight: 300;
+            line-height: 2;
+        }
+
+        /* ── FIRE 계산기 ── */
+        .calc-btn {
+            width: 100%;
+            padding: 14px;
+            background: var(--ink);
+            color: var(--paper);
+            border: none;
+            border-radius: 1px;
+            font-size: 10px;
+            font-weight: 400;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            cursor: pointer;
+            font-family: 'Noto Sans KR', sans-serif;
+            box-shadow: 0 2px 10px rgba(18, 10, 0, 0.2);
+            transition: background 0.2s;
+        }
+
+        .calc-btn:hover {
+            background: var(--accent);
+        }
+
+        .inputs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 18px;
+            margin-bottom: 18px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 9px;
+            font-weight: 400;
+            color: var(--muted);
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .input-group input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid var(--border-solid);
+            border-radius: 0;
+            padding: 8px 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--ink);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .input-group input:focus {
+            border-bottom-color: var(--ink);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .stat-box {
+            background: var(--card);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            padding: 16px;
+            text-align: center;
+            box-shadow: 0 1px 0 rgba(255, 250, 228, 0.85) inset, 0 2px 8px rgba(55, 38, 8, 0.06);
+            position: relative;
+            z-index: 1;
+        }
+
+        .stat-box.r {
+            border-color: rgba(122, 79, 56, 0.5);
+        }
+
+        .stat-box.b {
+            border-color: rgba(58, 86, 112, 0.5);
+        }
+
+        .stat-box.g {
+            border-color: rgba(66, 104, 82, 0.5);
+        }
+
+        .sbl {
+            font-size: 9px;
+            color: var(--muted);
+            margin-bottom: 8px;
+            font-weight: 400;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+        }
+
+        .sbv {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 18px;
+            font-weight: 400;
+        }
+
+        .stat-box.r .sbv {
+            color: var(--accent);
+        }
+
+        .stat-box.b .sbv {
+            color: var(--accent2);
+        }
+
+        .stat-box.g .sbv {
+            color: var(--accent3);
+        }
+
+        .sbs {
+            font-size: 10px;
+            color: var(--muted);
+            margin-top: 4px;
+            font-weight: 300;
+        }
+
+        .progress-bar {
+            height: 1px;
+            background: rgba(188, 174, 144, 0.5);
+            margin: 16px 0;
+        }
+
+        .progress-fill {
+            height: 1px;
+            background: linear-gradient(90deg, var(--accent), var(--sage));
+            transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 0%;
+        }
+
+        .progress-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: var(--muted);
+            font-family: 'JetBrains Mono', monospace;
+            margin-top: 6px;
+        }
+
+        .timeline-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .timeline-table th {
+            background: var(--ink);
+            color: var(--paper);
+            padding: 10px 12px;
+            text-align: left;
+            font-size: 9px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            font-weight: 400;
+        }
+
+        .timeline-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(188, 174, 144, 0.35);
+            font-weight: 300;
+        }
+
+        .timeline-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .timeline-table tr.target td {
+            background: rgba(66, 104, 82, 0.05);
+            font-weight: 400;
+        }
+
+        /* ── NAV ── */
+        .info-box {
+            background: rgba(208, 196, 166, 0.3);
+            border: 1px solid rgba(188, 174, 144, 0.45);
+            border-radius: 2px;
+            padding: 16px;
+            margin-bottom: 10px;
+        }
+
+        .info-title {
+            font-size: 11px;
+            font-weight: 400;
+            margin-bottom: 7px;
+            letter-spacing: 0.04em;
+            color: var(--ink2);
+        }
+
+        .info-text {
+            font-size: 11px;
+            color: var(--muted);
+            line-height: 1.9;
+            font-weight: 300;
+        }
+
+        .slider-group {
+            margin-bottom: 22px;
+        }
+
+        .slider-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            font-weight: 400;
+            margin-bottom: 10px;
+            color: var(--ink2);
+        }
+
+        .slider-group label span {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--sage);
+        }
+
+        input[type=range] {
+            width: 100%;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 1px;
+            background: var(--border-solid);
+            outline: none;
+            cursor: pointer;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: var(--ink);
+            border-radius: 50%;
+            box-shadow: 0 1px 4px rgba(18, 10, 0, 0.25);
+        }
+
+        .nav-result {
+            background: rgba(208, 196, 166, 0.28);
+            border: 1px solid rgba(188, 174, 144, 0.4);
+            border-radius: 2px;
+            padding: 16px;
+            margin-top: 14px;
+        }
+
+        .nav-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            padding: 7px 0;
+            border-bottom: 1px solid rgba(188, 174, 144, 0.3);
+            font-weight: 300;
+            color: var(--ink2);
+        }
+
+        .nav-row:last-child {
+            border-bottom: none;
+            font-weight: 400;
+        }
+
+        .nav-row span:last-child {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .pos {
+            color: var(--accent3);
+        }
+
+        .neg {
+            color: var(--accent);
+        }
+
+        /* ── 시나리오 ── */
+        .scenario-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .sc-card {
+            background: var(--card);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            padding: 14px;
+            box-shadow: 0 1px 0 rgba(255, 250, 228, 0.85) inset, 0 2px 8px rgba(55, 38, 8, 0.05);
+            z-index: 1;
+            position: relative;
+        }
+
+        .sc-card.winner {
+            border-color: rgba(66, 104, 82, 0.5);
+        }
+
+        .sc-title {
+            font-size: 11px;
+            font-weight: 400;
+            margin-bottom: 8px;
+        }
+
+        /* ── AI 채팅 ── */
+        .chat-top-bar {
+            display: flex;
+            justify-content: flex-end;
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(220, 211, 188, 0.88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .chat-reset {
+            font-size: 10px;
+            color: var(--muted);
+            background: none;
+            border: 1px solid var(--border-solid);
+            padding: 4px 12px;
+            cursor: pointer;
+            font-family: 'Noto Sans KR', sans-serif;
+            letter-spacing: 0.1em;
+            border-radius: 1px;
+        }
+
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-width: 560px;
+            width: 100%;
+            margin: 0 auto;
+            overscroll-behavior: contain;
+        }
+
+        .chat-area::-webkit-scrollbar {
+            display: none;
+        }
+
+        .cmsg {
+            display: flex;
+            gap: 10px;
+            animation: fadeUp 0.25s ease;
+        }
+
+        .cmsg.user {
+            flex-direction: row-reverse;
+        }
+
+        .cmsg-av {
+            width: 26px;
+            height: 26px;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            flex-shrink: 0;
+            margin-top: 2px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .cmsg.ai .cmsg-av {
+            background: var(--ink);
+            color: var(--paper);
+        }
+
+        .cmsg.user .cmsg-av {
+            background: var(--accent2);
+            color: #fff;
+        }
+
+        .cmsg-bub {
+            max-width: 82%;
+            padding: 12px 15px;
+            font-size: 13px;
+            line-height: 1.82;
+            font-weight: 300;
+            border-radius: 2px;
+        }
+
+        .cmsg.ai .cmsg-bub {
+            background: var(--card);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 0 rgba(255, 250, 228, 0.85) inset, 0 2px 8px rgba(55, 38, 8, 0.05);
+        }
+
+        .cmsg.user .cmsg-bub {
+            background: var(--ink);
+            color: var(--paper);
+        }
+
+        .cmsg-bub strong {
+            color: var(--yellow);
+            font-weight: 400;
+        }
+
+        .cmsg.user .cmsg-bub strong {
+            color: var(--paper);
+        }
+
+        .cquick {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        .cqbtn {
+            padding: 5px 12px;
+            border: 1px solid var(--border-solid);
+            background: transparent;
+            font-size: 10px;
+            cursor: pointer;
+            color: var(--muted);
+            font-family: 'Noto Sans KR', sans-serif;
+            letter-spacing: 0.05em;
+            border-radius: 1px;
+        }
+
+        .ctyping {
+            display: flex;
+            gap: 5px;
+            padding: 14px;
+        }
+
+        .ctyping span {
+            width: 4px;
+            height: 4px;
+            background: var(--muted2);
+            border-radius: 50%;
+            animation: bounce 1.2s infinite;
+        }
+
+        .ctyping span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .ctyping span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        .chat-input-area {
+            padding: 10px 16px 16px;
+            border-top: 1px solid var(--border);
+            background: rgba(220, 211, 188, 0.9);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+
+        .chat-input-row {
+            display: flex;
+            gap: 10px;
+            max-width: 560px;
+            margin: 0 auto;
+        }
+
+        .chat-input-box {
+            flex: 1;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid var(--border-solid);
+            border-radius: 0;
+            padding: 8px 0;
+            color: var(--ink);
+            font-family: 'Noto Sans KR', sans-serif;
+            font-size: 13px;
+            font-weight: 300;
+            outline: none;
+            resize: none;
+            max-height: 80px;
+            line-height: 1.6;
+            transition: border-color 0.2s;
+        }
+
+        .chat-input-box:focus {
+            border-bottom-color: var(--ink);
+        }
+
+        .chat-input-box::placeholder {
+            color: var(--muted2);
+        }
+
+        .chat-send-btn {
+            width: 36px;
+            height: 36px;
+            background: var(--ink);
+            border: none;
+            border-radius: 2px;
+            color: var(--paper);
+            font-size: 14px;
+            cursor: pointer;
+            flex-shrink: 0;
+            align-self: flex-end;
+            box-shadow: 0 2px 8px rgba(18, 10, 0, 0.2);
+        }
+
+        .chat-send-btn:disabled {
+            background: var(--border-solid);
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes bounce {
+
+            0%,
+            80%,
+            100% {
+                transform: translateY(0);
+            }
+
+            40% {
+                transform: translateY(-4px);
+            }
+        }
+
+        .animate {
+            animation: fadeUp 0.25s ease forwards;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="app-header">
+        <div class="app-title">Fire Diary</div>
+        <div class="header-right">ETF 50+ · AI</div>
+    </div>
+
+    <div class="content">
+
+        <!-- ETF 도감 -->
+        <div class="section active" id="tab-etf">
+            <div class="section-inner">
+                <div class="philosophy-wrap">
+    <button class="philosophy-toggle" id="philoBtn" onclick="togglePhilo()">
+      <span>투자 철학</span><span class="phil-arrow" style="margin-left:auto;padding-left:12px">∨</span>
+    </button>
+    <div class="philosophy-body" id="philoBody">
+  <div class="compare-banner">
+                    <div class="compare-title">투자 철학</div>
+                    <div class="compare-grid">
+                        <div class="compare-left">
+                            <div class="compare-label">현금흐름형</div>
+                            <div class="compare-points">지금 당장 배당<br>매달/매주 현금<br>복리 재투자 가능<br>주가 성장 포기<br>NAV 우하향 위험
+                            </div>
+                        </div>
+                        <div class="compare-vs">vs</div>
+                        <div>
+                            <div class="compare-label" style="color:#8AA8C4">성장형</div>
+                            <div class="compare-points">장기 복리 극대화<br>주가 상승 수혜<br>세금 이연 효과<br>지금 현금 없음<br>오랜 기다림 필요</div>
+                        </div>
+                    </div>
+                    <div class="compare-tip">혼합형(SCHD)은 배당+성장 균형. 10년+ 장기에서 가장 안정적.<br>레버리지형은 상승장엔 폭발적 수익, 하락장엔 폭발적
+                        손실.<br>채권형은 금리 인하 시기에 빛남.</div>
+                </div>
+                <input class="search-box" id="etfSearch" placeholder="검색 — ETF 이름 또는 티커" oninput="debouncedSearch()">
+                <div class="filter-wrap">
+                    <span class="filter-label">유형</span>
+                    <div class="filter-row" id="typeFilters">
+                        <button class="filter-btn active" onclick="setFilter('type','all',this)">전체</button>
+                        <button class="filter-btn" onclick="setFilter('type','cash',this)">현금흐름형</button>
+                        <button class="filter-btn" onclick="setFilter('type','growth',this)">성장형</button>
+                        <button class="filter-btn" onclick="setFilter('type','blend',this)">혼합형</button>
+                        <button class="filter-btn" onclick="setFilter('type','bond',this)">채권형</button>
+                        <button class="filter-btn" onclick="setFilter('type','sector',this)">섹터/테마</button>
+                        <button class="filter-btn" onclick="setFilter('type','leverage',this)">레버리지</button>
+                        <button class="filter-btn" onclick="setFilter('type','crypto',this)">크립토</button>
+                    </div>
+                    <span class="filter-label">운용사</span>
+                    <div class="filter-row" id="issuerFilters">
+                        <button class="filter-btn active" onclick="setFilter('issuer','all',this)">전체</button>
+                        <button class="filter-btn" onclick="setFilter('issuer','roundhill',this)">Roundhill</button>
+                        <button class="filter-btn" onclick="setFilter('issuer','jpmorgan',this)">JPMorgan</button>
+                        <button class="filter-btn" onclick="setFilter('issuer','vanguard',this)">Vanguard</button>
+                        <button class="filter-btn" onclick="setFilter('issuer','blackrock',this)">BlackRock</button>
+                        <button class="filter-btn" onclick="setFilter('issuer','invesco',this)">Invesco</button>
+                        <button class="filter-btn" onclick="setFilter('issuer','globalx',this)">Global X</button>
+                        <button class="filter-btn" onclick="setFilter('issuer','schwab',this)">Schwab</button>
+                        <button class="filter-btn" onclick="setFilter('issuer','yieldmax',this)">YieldMax</button>
+                        <button class="filter-btn" onclick="setFilter('issuer','proshares',this)">ProShares</button>
+                        <button class="filter-btn" onclick="setFilter('issuer','spdr',this)">SPDR</button>
+                        <button class="filter-btn" onclick="setFilter('issuer','neos',this)">NEOS</button>
+                    </div>
+                </div>
+                <div class="etf-count" id="etfCount"></div>
+                <div class="etf-grid" id="etfGrid"></div>
+            </div>
+        </div>
+
+        <!-- 투자 일기 -->
+        <div class="section" id="tab-diary">
+            <div class="section-inner">
+                <div class="card">
+                    <div class="diary-form-header">
+                        <div class="diary-form-date" id="diaryFormDate"></div>
+                        <div class="diary-form-day" id="diaryFormDay"></div>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group"><label>ETF / 종목</label><input type="text" id="d-ticker"
+                                placeholder="QDTE, VOO..."></div>
+                        <div class="form-group"><label>날짜</label><input type="date" id="d-date"
+                                onchange="updateDiaryDate()"></div>
+                        <div class="form-group"><label>수량 (주)</label><input type="number" id="d-shares" placeholder="0">
+                        </div>
+                        <div class="form-group"><label>단가 ($)</label><input type="number" id="d-price"
+                                placeholder="0.00" step="0.01"></div>
+                        <div class="form-group full"><label>오늘의 생각</label><textarea id="d-note"
+                                placeholder="왜 샀는지, 시장 분위기, 앞으로의 계획..."></textarea></div>
+                    </div>
+                    <button class="save-btn" id="save-btn" onclick="saveDiary()">기록 저장</button>
+                    <button class="cancel-btn" id="cancel-btn" onclick="cancelEdit()">취소</button>
+                </div>
+                <div class="diary-list" id="diaryList"></div>
+            </div>
+        </div>
+
+        <!-- FIRE 계산기 -->
+        <div class="section" id="tab-fire">
+            <div class="section-inner">
+                <div class="card">
+                    <div class="section-title">FIRE 계산기</div>
+                    <p style="font-size:11px;color:var(--muted);margin-bottom:20px;line-height:1.88;font-weight:300">보유
+                        ETF 정보를 입력하면 배당 복리 성장 타임라인을 계산해드려요.</p>
+                    <div class="inputs-grid">
+                        <div class="input-group"><label>ETF 종목명</label><input type="text" id="f-etf"
+                                placeholder="QDTE, JEPQ..."></div>
+                        <div class="input-group"><label>보유 수량 (주)</label><input type="number" id="f-shares"
+                                placeholder="0" value="0"></div>
+                        <div class="input-group"><label>현재 주가 ($)</label><input type="number" id="f-price"
+                                placeholder="0.00" step="0.01"></div>
+                        <div class="input-group"><label>연 배당률 (%)</label><input type="number" id="f-div"
+                                placeholder="42"></div>
+                        <div class="input-group"><label>1년차 월 추가 투자 (만원)</label><input type="number" id="f-m1"
+                                placeholder="300"></div>
+                        <div class="input-group"><label>2년차~ 월 추가 투자 (만원)</label><input type="number" id="f-m2"
+                                placeholder="100"></div>
+                        <div class="input-group"><label>목표 월배당 (만원)</label><input type="number" id="f-target"
+                                placeholder="500"></div>
+                        <div class="input-group"><label>환율 (원/$)</label><input type="number" id="f-fx"
+                                placeholder="1380" value="1380"></div>
+                    </div>
+                    <button class="calc-btn" onclick="calcFire()">계산하기</button>
+                </div>
+                <div id="fireResult" style="display:none">
+                    <div class="stats-grid" id="fireStats"></div>
+                    <div class="card">
+                        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px">
+                            <span
+                                style="font-size:9px;color:var(--muted);letter-spacing:0.22em;text-transform:uppercase">달성률</span>
+                            <span style="font-family:'JetBrains Mono',monospace;font-size:24px;color:var(--ink)"
+                                id="firePct">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="fireFill"></div>
+                        </div>
+                        <div class="progress-labels"><span id="fireNow">현재 0만원</span><span id="fireGoal">목표 500만원</span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="section-title">연도별 성장 타임라인</div>
+                        <div style="overflow-x:auto">
+                            <table class="timeline-table" id="fireTable"></table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NAV 전략 -->
+        <div class="section" id="tab-nav">
+            <div class="section-inner">
+                <div class="card">
+                    <div class="section-title">NAV 전략</div>
+                    <div class="info-box">
+                        <div class="info-title">커버드콜 ETF의 숙명</div>
+                        <div class="info-text">커버드콜 ETF는 배당을 많이 줄수록 주가(NAV)가 서서히 하락할 수 있어요. 배당의 일부가 원금에서 나오는 구조이기 때문이에요.
+                        </div>
+                    </div>
+                    <div class="info-box">
+                        <div class="info-title">유형별 NAV 특성</div>
+                        <div class="info-text"><b style="font-weight:500">0DTE형 (QDTE, XDTE)</b> — 배당률 최고, NAV 변동성
+                            높음<br><b style="font-weight:500">ELN형 (JEPQ, JEPI)</b> — 배당률 중간, NAV 상대적 안정<br><b
+                                style="font-weight:500">ATM (QYLD, XYLD)</b> — 배당률 중간, NAV 우하향<br><b
+                                style="font-weight:500">선택적 (DIVO)</b> — 배당률 낮지만 NAV 성장 가능</div>
+                    </div>
+                    <div class="info-box">
+                        <div class="info-title">NAV 방어 전략</div>
+                        <div class="info-text"><b style="font-weight:500">상승장</b> — NAV 재투자 비율 낮춰도 됨 (10~15%)<br><b
+                                style="font-weight:500">횡보/하락장</b> — NAV 재투자 30~45%로 올려 원금 방어<br><b
+                                style="font-weight:500">장기 관점</b> — 커버드콜 현금흐름 + VOO/QQQ 적립</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="section-title">FIRE 달성 후 전략 시뮬레이터</div>
+                    <p style="font-size:11px;color:var(--muted);margin-bottom:22px;line-height:1.88;font-weight:300">목표
+                        배당 달성 후 재투자·성장형 이전 비율을 조절해보세요.</p>
+                    <div class="slider-group"><label>월 총 배당 (만원) <span id="sv-total">500</span></label><input
+                            type="range" min="100" max="1000" value="500" id="sl-total" oninput="updateNav()"></div>
+                    <div class="slider-group"><label>NAV 보완 재투자 비율 <span id="sv-nav">25</span>%</label><input
+                            type="range" min="0" max="60" value="25" id="sl-nav" oninput="updateNav()"></div>
+                    <div class="slider-group"><label>성장형 ETF 이전 비율 <span id="sv-growth">25</span>%</label><input
+                            type="range" min="0" max="60" value="25" id="sl-growth" oninput="updateNav()"></div>
+                    <div class="nav-result" id="navResult"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 시나리오 -->
+        <div class="section" id="tab-scenario">
+            <div class="section-inner">
+                <div class="card">
+                    <div class="section-title">갈아타기 시나리오</div>
+                    <p style="font-size:11px;color:var(--muted);margin-bottom:18px;line-height:1.88;font-weight:300">현재
+                        보유 종목을 팔고 배당형 ETF로 갈아탔을 때 5년 후 결과를 비교해드려요.</p>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
+                        <div
+                            style="background:rgba(208,196,166,0.28);border:1px solid rgba(188,174,144,0.4);padding:14px;border-radius:2px">
+                            <div
+                                style="font-size:9px;font-weight:400;color:var(--muted);letter-spacing:0.22em;text-transform:uppercase;margin-bottom:14px">
+                                현재 보유 (A)</div>
+                            <div class="inputs-grid" style="grid-template-columns:1fr;gap:14px;margin-bottom:0">
+                                <div class="input-group"><label>종목명</label><input type="text" id="sc-a-name"
+                                        placeholder="SLNH, BTC..."></div>
+                                <div class="input-group"><label>보유 수량 (주)</label><input type="number"
+                                        id="sc-slnh-shares" placeholder="0"></div>
+                                <div class="input-group"><label>현재가 ($)</label><input type="number" id="sc-slnh-price"
+                                        placeholder="0.00" step="0.01"></div>
+                            </div>
+                        </div>
+                        <div
+                            style="background:rgba(208,196,166,0.28);border:1px solid rgba(188,174,144,0.4);padding:14px;border-radius:2px">
+                            <div
+                                style="font-size:9px;font-weight:400;color:var(--muted);letter-spacing:0.22em;text-transform:uppercase;margin-bottom:14px">
+                                갈아탈 ETF (B)</div>
+                            <div class="inputs-grid" style="grid-template-columns:1fr;gap:14px;margin-bottom:0">
+                                <div class="input-group"><label>종목명</label><input type="text" id="sc-b-name"
+                                        placeholder="QDTE, JEPQ..."></div>
+                                <div class="input-group"><label>주가 ($)</label><input type="number" id="sc-qdte-price"
+                                        placeholder="0.00" step="0.01"></div>
+                                <div class="input-group"><label>연 배당률 (%)</label><input type="number" id="sc-div"
+                                        placeholder="42"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="inputs-grid">
+                        <div class="input-group"><label>1년차 월 투자 (만원)</label><input type="number" id="sc-m1"
+                                placeholder="300"></div>
+                        <div class="input-group"><label>2년차~ 월 투자 (만원)</label><input type="number" id="sc-m2"
+                                placeholder="100"></div>
+                        <div class="input-group"><label>환율 (원/$)</label><input type="number" id="sc-fx"
+                                placeholder="1380" value="1380"></div>
+                    </div>
+                    <button class="calc-btn" onclick="calcScenario()">시나리오 비교</button>
+                </div>
+                <div id="scenarioResult" style="display:none">
+                    <div class="scenario-grid" id="scenarioCards"></div>
+                    <div class="card">
+                        <div class="section-title">5년 타임라인 비교</div>
+                        <div style="overflow-x:auto">
+                            <table class="timeline-table" id="scenarioTable"></table>
+                        </div>
+                    </div>
+                    <div class="card" id="scenarioConclusion"></div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- end .content -->
+
+    <!-- AI 채팅 -->
+    <div class="section" id="tab-ai">
+        <div class="chat-top-bar"><button class="chat-reset" onclick="resetChat()">새 대화</button></div>
+        <div class="chat-area" id="chatArea"></div>
+        <div class="chat-input-area">
+            <div class="chat-input-row">
+                <textarea class="chat-input-box" id="chatInput" placeholder="메시지를 입력하세요..." rows="1"
+                    onkeydown="handleChatKey(event)" oninput="autoChatResize(this)"></textarea>
+                <button class="chat-send-btn" id="chatSendBtn" onclick="sendChatMsg()">↑</button>
+            </div>
+        </div>
+    </div>
+
+    <nav class="bottom-nav">
+        <button class="bnav-item active" onclick="switchTab('etf',this)">
+            <div class="bnav-label">ETF</div>
+        </button>
+        <button class="bnav-item" onclick="switchTab('diary',this)">
+            <div class="bnav-label">일기</div>
+        </button>
+        <button class="bnav-item" onclick="switchTab('fire',this)">
+            <div class="bnav-label">FIRE</div>
+        </button>
+        <button class="bnav-item" onclick="switchTab('nav',this)">
+            <div class="bnav-label">NAV</div>
+        </button>
+        <button class="bnav-item" onclick="switchTab('scenario',this)">
+            <div class="bnav-label">비교</div>
+        </button>
+        <button class="bnav-item" onclick="switchTab('ai',this)">
+            <div class="bnav-label">AI</div>
+        </button>
+    </nav>
+
+    <script>
+        // ── 일기 날짜 표시 ──
+        function updateDiaryDate() {
+            const input = document.getElementById('d-date');
+            const dateEl = document.getElementById('diaryFormDate');
+            const dayEl = document.getElementById('diaryFormDay');
+            if (!input || !input.value) return;
+            const d = new Date(input.value + 'T00:00:00');
+            const days = ['일', '월', '화', '수', '목', '금', '토'];
+            dateEl.textContent = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+            dayEl.textContent = `${days[d.getDay()]}요일`;
+        }
+        // ── 일기 CRUD ──
+        let diary = JSON.parse(localStorage.getItem('fire_diary3') || '[]');
+        let editingId = null;
+
+        function saveDiary() {
+            const ticker = document.getElementById('d-ticker').value.trim();
+            const date = document.getElementById('d-date').value;
+            if (!ticker || !date) { alert('종목명과 날짜 필수!'); return; }
+            const entry = { ticker, date, shares: document.getElementById('d-shares').value, price: document.getElementById('d-price').value, note: document.getElementById('d-note').value.trim() };
+            if (editingId) {
+                diary = diary.map(e => e.id === editingId ? { ...entry, id: editingId } : e);
+                editingId = null;
+                document.getElementById('save-btn').textContent = '기록 저장';
+                document.getElementById('cancel-btn').style.display = 'none';
+            } else {
+                diary.unshift({ ...entry, id: Date.now() });
+            }
+            localStorage.setItem('fire_diary3', JSON.stringify(diary));
+            ['d-ticker', 'd-shares', 'd-price', 'd-note'].forEach(id => document.getElementById(id).value = '');
+            renderDiary();
+        }
+
+        function editDiary(id) {
+            const e = diary.find(d => d.id === id);
+            if (!e) return;
+            editingId = id;
+            document.getElementById('d-ticker').value = e.ticker;
+            document.getElementById('d-date').value = e.date;
+            document.getElementById('d-shares').value = e.shares || '';
+            document.getElementById('d-price').value = e.price || '';
+            document.getElementById('d-note').value = e.note || '';
+            updateDiaryDate();
+            document.getElementById('save-btn').textContent = '수정 저장';
+            document.getElementById('cancel-btn').style.display = 'block';
+            document.querySelector('.content').scrollTop = 0;
+        }
+
+        function cancelEdit() {
+            editingId = null;
+            ['d-ticker', 'd-shares', 'd-price', 'd-note'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('d-date').value = new Date().toISOString().split('T')[0];
+            updateDiaryDate();
+            document.getElementById('save-btn').textContent = '기록 저장';
+            document.getElementById('cancel-btn').style.display = 'none';
+        }
+
+        function deleteDiary(id) {
+            diary = diary.filter(e => e.id !== id);
+            localStorage.setItem('fire_diary3', JSON.stringify(diary));
+            if (editingId === id) cancelEdit();
+            renderDiary();
+        }
+
+        function renderDiary() {
+            const list = document.getElementById('diaryList');
+            if (!list) return;
+            if (!diary.length) {
+                list.innerHTML = '<div class="empty-state">아직 기록이 없어요<br><span style="font-size:11px;opacity:0.6;display:block;margin-top:6px">첫 번째 투자 일기를 써보세요</span></div>';
+                return;
+            }
+            const fmtDate = (d) => {
+                const dt = new Date(d + 'T00:00:00');
+                const days = ['일', '월', '화', '수', '목', '금', '토'];
+                return `${dt.getFullYear()}.${String(dt.getMonth() + 1).padStart(2, '0')}.${String(dt.getDate()).padStart(2, '0')} ${days[dt.getDay()]}`;
+            };
+            list.innerHTML = diary.map(e => `
+    <div class="diary-item ${editingId === e.id ? 'editing' : ''}">
+      <div class="diary-item-date">${fmtDate(e.date)}</div>
+      <div class="diary-item-top">
+        <div class="diary-ticker">${e.ticker.toUpperCase()}</div>
+        <div class="diary-actions">
+          <button class="edit-btn" onclick="editDiary(${e.id})">수정</button>
+          <button class="del-btn" onclick="deleteDiary(${e.id})">삭제</button>
+        </div>
+      </div>
+      <div class="diary-meta">
+        ${e.shares ? `<span>${e.shares}주</span>` : ''}
+        ${e.price ? `<span>$${e.price}</span>` : ''}
+        ${e.shares && e.price ? `<span>합계 $${(e.shares * e.price).toFixed(0)}</span>` : ''}
+      </div>
+      ${e.note ? `<div class="diary-note">${e.note.replace(/\n/g, '<br>')}</div>` : ''}
+    </div>
+  `).join('');
+        }
+    </script>
+<script>
+
+// ── 투자 철학 토글 ──
+function togglePhilo() {
+  const btn = document.getElementById('philoBtn');
+  const body = document.getElementById('philoBody');
+  const open = !body.classList.contains('open');
+  body.classList.toggle('open', open);
+  btn.classList.toggle('open', open);
+  localStorage.setItem('philoOpen', open);
+}
+(function() {
+  if (localStorage.getItem('philoOpen') === 'true') {
+    const body = document.getElementById('philoBody');
+    const btn = document.getElementById('philoBtn');
+    if (body) { body.classList.add('open'); btn.classList.add('open'); }
+  }
+})();
+
+// ── ETF 카드 요약 토글 ──
+function toggleETF(card) {
+  card.classList.toggle('expanded');
+}
+
+// ── 검색 debounce ──
+let _st = null;
+function debouncedSearch() { clearTimeout(_st); _st = setTimeout(renderETFs, 280); }
+
+// ===== ETF 데이터 50개 =====
+const ETFS = [
+  // ── 현금흐름형 (0DTE / 커버드콜) ──
+  {ticker:'QDTE',name:'Innovation-100 0DTE Covered Call',issuer:'Roundhill',type:'cash',ik:'roundhill',div:'~48%',freq:'주간',exp:'0.97%',aum:'$1.5B',risk:5,summary:'나스닥100 기반 매일 0DTE 커버드콜. 주간 배당으로 현금흐름 최강. NAV 우하향 위험 있어 배당 일부 재투자 필수. FIRE 현금흐름 목표에 최적화된 상품.',fits:['지금 당장 현금','주간 배당','FIRE 현금흐름','복리 재투자']},
+  {ticker:'XDTE',name:'S&P 500 0DTE Covered Call',issuer:'Roundhill',type:'cash',ik:'roundhill',div:'~21%',freq:'주간',exp:'0.97%',aum:'$300M',risk:4,summary:'S&P500 기반 0DTE 커버드콜. QDTE보다 배당 낮지만 변동성도 낮고 안정적. 나스닥 집중이 부담스러울 때 QDTE와 분산 보유하기 좋음.',fits:['안정적 배당','S&P500 기반','QDTE 분산']},
+  {ticker:'RDTE',name:'Russell 2000 0DTE Covered Call',issuer:'Roundhill',type:'cash',ik:'roundhill',div:'~25%',freq:'주간',exp:'0.97%',aum:'$150M',risk:5,summary:'중소형주 Russell 2000 기반 0DTE. 소형주 노출을 원하면서 주간 배당도 받고 싶을 때. 변동성이 커서 배당률이 높지만 NAV 변동도 심함.',fits:['소형주 노출','주간 배당','고위험 고수익']},
+  {ticker:'JEPQ',name:'Nasdaq Equity Premium Income',issuer:'JPMorgan',type:'cash',ik:'jpmorgan',div:'~11%',freq:'월간',exp:'0.35%',aum:'$20B',risk:3,summary:'나스닥100 + ELN(주가연계증권) 조합. QDTE보다 배당 낮지만 NAV 안정적. 주가 성장도 어느정도 참여 가능. 저비용에 신뢰도 높음.',fits:['배당+성장 균형','NAV 안정','장기 보유','월간 현금흐름']},
+  {ticker:'JEPI',name:'Equity Premium Income',issuer:'JPMorgan',type:'cash',ik:'jpmorgan',div:'~8%',freq:'월간',exp:'0.35%',aum:'$35B',risk:2,summary:'S&P500 기반 커버드콜. JEPQ의 S&P500 버전. 하락장에서 더 버팀. 저변동성 우선주 포함해 방어적 성격 강함. 안정 중시할 때 선택.',fits:['하락 방어','안정적 배당','월간 현금흐름','보수적 투자']},
+  {ticker:'GPIQ',name:'Nasdaq-100 & Equity Premium Income',issuer:'Goldman Sachs',type:'cash',ik:'goldman',div:'~13%',freq:'월간',exp:'0.33%',aum:'$3B',risk:3,summary:'골드만삭스판 JEPQ. 나스닥100 + 커버드콜. JEPQ와 유사하나 옵션 전략이 약간 달라 배당률이 소폭 높음. 분산 목적으로 JEPQ와 함께 보유하는 경우도 있음.',fits:['월간 배당','나스닥 노출','JEPQ 대안']},
+  {ticker:'QQQI',name:'Nasdaq-100 High Income ETF',issuer:'NEOS',type:'cash',ik:'neos',div:'~14%',freq:'월간',exp:'0.68%',aum:'$2B',risk:3,summary:'NEOS의 데이터 기반 옵션 전략. 유연한 커버드콜로 상승장에서도 NAV 방어가 상대적으로 뛰어남. QDTE보다 안정적인 현금흐름 원할 때 좋은 대안.',fits:['안정적 현금흐름','NAV 방어','데이터 기반 전략']},
+  {ticker:'SPYI',name:'S&P 500 High Income ETF',issuer:'NEOS',type:'cash',ik:'neos',div:'~12%',freq:'월간',exp:'0.68%',aum:'$3B',risk:2,summary:'NEOS의 S&P500 기반 고수익 ETF. 유연한 옵션 전략으로 XYLD보다 NAV가 안정적. 세금 효율도 높은 편. S&P500 기반 월배당 원할 때 JEPI의 좋은 대안.',fits:['S&P500 월배당','세금 효율','NAV 안정']},
+  {ticker:'QYLD',name:'NASDAQ 100 Covered Call',issuer:'Global X',type:'cash',ik:'globalx',div:'~12%',freq:'월간',exp:'0.60%',aum:'$7B',risk:3,summary:'나스닥100 ATM 커버드콜. 오래된 상품이지만 NAV 하락이 QDTE보다 심한 편. 배당률은 JEPQ보다 높지만 장기 성과는 JEPQ가 우위. 요즘은 JEPQ/QQQI 대비 매력 떨어짐.',fits:['월간 배당','나스닥 노출']},
+  {ticker:'XYLD',name:'S&P 500 Covered Call',issuer:'Global X',type:'cash',ik:'globalx',div:'~10%',freq:'월간',exp:'0.60%',aum:'$3B',risk:3,summary:'S&P500 ATM 커버드콜. QYLD의 S&P500 버전. NAV 하락 이슈 있어 장기 보유엔 주의. JEPI/SPYI 대비 매력이 상대적으로 낮아짐.',fits:['월간 배당','S&P500']},
+  {ticker:'RYLD',name:'Russell 2000 Covered Call',issuer:'Global X',type:'cash',ik:'globalx',div:'~13%',freq:'월간',exp:'0.60%',aum:'$1.5B',risk:4,summary:'Russell 2000 소형주 커버드콜. 소형주 특성상 배당률 높지만 변동성도 큼. 소형주 상승장 기대하면서 배당도 챙기고 싶을 때.',fits:['소형주 배당','고배당','월간 지급']},
+  {ticker:'DIVO',name:'CWP Enhanced Dividend Income',issuer:'Amplify',type:'cash',ik:'amplify',div:'~5%',freq:'월간',exp:'0.55%',aum:'$3B',risk:2,summary:'25~30개 고품질 대형주 선별 + 개별주 커버드콜 전술 운용. 배당률은 낮지만 NAV 상승도 함께 가능. 장기 총수익률이 XYLD/QYLD보다 우수.',fits:['NAV+배당 균형','안정 기업','장기 보유']},
+  // ── 현금흐름형 (YieldMax 단일종목) ──
+  {ticker:'CONY',name:'COIN Option Income',issuer:'YieldMax',type:'cash',ik:'yieldmax',div:'~80%+',freq:'월간',exp:'1.01%',aum:'$1B',risk:5,summary:'코인베이스 단일종목 커버드콜. 배당률 극단적으로 높지만 리스크도 극단적. 암호화폐 시장 연동. 소액 고위험 포지션용으로만.',fits:['극고수익','고위험','소액 분산']},
+  {ticker:'NVDY',name:'NVDA Option Income',issuer:'YieldMax',type:'cash',ik:'yieldmax',div:'~50%+',freq:'월간',exp:'1.01%',aum:'$4B',risk:5,summary:'엔비디아 단일종목 커버드콜. AI 랠리 수혜 기대하면서 배당도 원할 때. 엔비디아 주가 완전 연동. NAV 변동성 극심.',fits:['AI 테마','고배당','고위험']},
+  {ticker:'TSLY',name:'Tesla Option Income',issuer:'YieldMax',type:'cash',ik:'yieldmax',div:'~60%+',freq:'월간',exp:'1.01%',aum:'$1.5B',risk:5,summary:'테슬라 단일종목 커버드콜. 테슬라 특유의 극단적 변동성 때문에 배당률 매우 높음. 테슬라 주가에 완전 연동. NAV 우하향 속도가 빠름.',fits:['테슬라 테마','극고배당','투기적']},
+  {ticker:'MSFO',name:'Microsoft Option Income',issuer:'YieldMax',type:'cash',ik:'yieldmax',div:'~30%+',freq:'월간',exp:'1.01%',aum:'$500M',risk:4,summary:'마이크로소프트 단일종목 커버드콜. MS의 상대적 안정성 덕에 YieldMax 중 변동성이 낮은 편. AI/클라우드 성장 기대하면서 배당도 원할 때.',fits:['MS 테마','상대적 안정','고배당']},
+  {ticker:'AMZY',name:'Amazon Option Income',issuer:'YieldMax',type:'cash',ik:'yieldmax',div:'~35%+',freq:'월간',exp:'1.01%',aum:'$400M',risk:4,summary:'아마존 단일종목 커버드콜. 클라우드(AWS)/커머스 성장 기대하면서 배당도 받고 싶을 때.',fits:['아마존 테마','고배당','클라우드']},
+  // ── 성장형 ──
+  {ticker:'VOO',name:'S&P 500 ETF',issuer:'Vanguard',type:'growth',ik:'vanguard',div:'~1.3%',freq:'분기',exp:'0.03%',aum:'$500B+',risk:2,summary:'S&P500 추종. 미국 500대 기업 분산투자. 배당은 적지만 장기 복리 성장 강력. 업계 최저 비용. 20년+ 장기 관점이면 최강. FIRE 달성 후 안정 자산으로 전환 시 최적.',fits:['20년+ 초장기','복리 극대화','최저 비용','FIRE 전환 후']},
+  {ticker:'IVV',name:'iShares S&P 500 ETF',issuer:'BlackRock',type:'growth',ik:'blackrock',div:'~1.3%',freq:'분기',exp:'0.03%',aum:'$500B+',risk:2,summary:'VOO와 거의 동일한 S&P500 추종. BlackRock iShares 운용. 성과·비용 모두 VOO와 차이 없어 증권사 따라 선택. 기관 투자자들이 더 많이 씀.',fits:['VOO 대안','BlackRock 선호','장기투자']},
+  {ticker:'SPY',name:'SPDR S&P 500 ETF',issuer:'SPDR',type:'growth',ik:'spdr',div:'~1.3%',freq:'분기',exp:'0.09%',aum:'$500B+',risk:2,summary:'세계에서 가장 오래된 ETF(1993). 유동성 최강으로 기관/트레이더 선호. VOO보다 비용 약간 높지만 옵션 거래 편의성이 뛰어남.',fits:['최고 유동성','트레이더 선호','옵션 거래']},
+  {ticker:'SPLG',name:'Portfolio S&P 500 ETF',issuer:'SPDR',type:'growth',ik:'spdr',div:'~1.3%',freq:'분기',exp:'0.02%',aum:'$50B',risk:2,summary:'VOO와 동일 지수, 주가 낮아 소액투자에 유리. 운용보수 업계 최저 수준. VOO 살 돈 부족할 때 대안.',fits:['소액 분할매수','최저 비용','VOO 대안']},
+  {ticker:'VTI',name:'Total Stock Market ETF',issuer:'Vanguard',type:'growth',ik:'vanguard',div:'~1.3%',freq:'분기',exp:'0.03%',aum:'$400B+',risk:2,summary:'미국 전체 주식시장 추종. 대형+중형+소형주 모두 포함. VOO보다 더 넓은 분산. 장기 성과는 VOO와 거의 동일.',fits:['넓은 분산','장기투자','소형주 포함']},
+  {ticker:'QQQ',name:'NASDAQ-100 ETF',issuer:'Invesco',type:'growth',ik:'invesco',div:'~0.6%',freq:'분기',exp:'0.20%',aum:'$300B+',risk:3,summary:'나스닥100 추종. 애플·MS·엔비디아 등 빅테크 집중. VOO보다 성장성 높지만 변동성도 큼. AI/기술주 상승장에서 강함. 트레이더 선호.',fits:['기술주 집중','높은 성장','10~20년 보유']},
+  {ticker:'QQQM',name:'NASDAQ-100 ETF (저비용)',issuer:'Invesco',type:'growth',ik:'invesco',div:'~0.6%',freq:'분기',exp:'0.15%',aum:'$30B',risk:3,summary:'QQQ의 장기투자자용 버전. 비용 저렴하고 주가 낮아 소액 매수에 유리. 트레이더는 QQQ, 장기투자자는 QQQM.',fits:['QQQ 장기투자 버전','저비용','소액 적립식']},
+  {ticker:'VGT',name:'Information Technology ETF',issuer:'Vanguard',type:'sector',ik:'vanguard',div:'~0.6%',freq:'분기',exp:'0.10%',aum:'$70B',risk:4,summary:'IT 섹터 집중 ETF. QQQ보다 IT 순수도가 높음. 애플·MS·엔비디아 비중 매우 높음. AI 테마 강하게 베팅하고 싶을 때.',fits:['IT 순수 노출','AI 테마','QQQ 대안']},
+  {ticker:'VUG',name:'Growth ETF',issuer:'Vanguard',type:'growth',ik:'vanguard',div:'~0.5%',freq:'분기',exp:'0.04%',aum:'$150B',risk:3,summary:'미국 성장주 집중. 나스닥 느낌이지만 S&P500 성장주 필터링. QQQ보다 넓고 VOO보다 성장 지향적.',fits:['성장주 집중','저비용','VOO+QQQ 중간']},
+  {ticker:'ARKK',name:'Innovation ETF',issuer:'ARK',type:'sector',ik:'ark',div:'~0%',freq:'없음',exp:'0.75%',aum:'$7B',risk:5,summary:'캐시 우드의 파괴적 혁신 ETF. AI·로보틱스·게노믹스 등 테마. 극단적 성장 기대하지만 변동성도 극단적. 2021년 고점 대비 80% 하락 경험. 소액만.',fits:['파괴적 혁신','고위험','테마 투자']},
+  // ── 혼합형 ──
+  {ticker:'SCHD',name:'U.S. Dividend Equity ETF',issuer:'Schwab',type:'blend',ik:'schwab',div:'~3.5%',freq:'분기',exp:'0.06%',aum:'$60B',risk:2,summary:'배당 성장주 위주. 매년 배당이 꾸준히 늘어남. 장기적으로 배당도 커지고 주가도 오르는 이상적 구조. 10년+ 장기투자자 최고.',fits:['10년+ 장기','배당 성장','낮은 비용','안정 기업']},
+  {ticker:'VYM',name:'High Dividend Yield ETF',issuer:'Vanguard',type:'blend',ik:'vanguard',div:'~3.0%',freq:'분기',exp:'0.06%',aum:'$55B',risk:2,summary:'고배당주 ETF. SCHD보다 배당 성장은 느리지만 현재 배당이 더 높음. 배당 지금 받으면서 안정적으로 가고 싶을 때.',fits:['고배당','안정성','은퇴 포트폴리오']},
+  {ticker:'DVY',name:'Dow Jones Select Dividend',issuer:'BlackRock',type:'blend',ik:'blackrock',div:'~4.5%',freq:'분기',exp:'0.38%',aum:'$20B',risk:2,summary:'다우존스 고배당 지수 추종. 배당률이 VYM/SCHD보다 높음. 에너지·유틸리티 비중이 높아 방어적. 금리 민감도 있음.',fits:['고배당','에너지/유틸리티','방어적']},
+  {ticker:'DGRO',name:'Core Dividend Growth ETF',issuer:'BlackRock',type:'blend',ik:'blackrock',div:'~2.3%',freq:'분기',exp:'0.08%',aum:'$25B',risk:2,summary:'배당 성장 특화. SCHD와 유사하지만 약간 다른 스타일. 매년 배당 증가율이 높은 기업들 선별. 장기 복리에 최적.',fits:['배당 성장','BlackRock','SCHD 대안']},
+  {ticker:'HDV',name:'High Dividend ETF',issuer:'BlackRock',type:'blend',ik:'blackrock',div:'~4.0%',freq:'분기',exp:'0.08%',aum:'$10B',risk:2,summary:'모닝스타 배당 수익 지수 추종. 에너지·헬스케어·통신 비중 높음. 배당률 높고 가치주 성격 강함.',fits:['가치주 배당','에너지 노출','방어적']},
+  // ── 채권형 ──
+  {ticker:'BND',name:'Total Bond Market ETF',issuer:'Vanguard',type:'bond',ik:'vanguard',div:'~4%',freq:'월간',exp:'0.03%',aum:'$100B+',risk:1,summary:'미국 전체 채권시장 추종. 금리 인하 시기에 가격 상승. 주식 하락장 방어막 역할. 안정적 월간 이자 수입.',fits:['하락장 방어','안정 수입','포트폴리오 균형']},
+  {ticker:'AGG',name:'Core U.S. Aggregate Bond ETF',issuer:'BlackRock',type:'bond',ik:'blackrock',div:'~4%',freq:'월간',exp:'0.03%',aum:'$100B+',risk:1,summary:'BND와 거의 동일한 미국 채권시장 추종. 초저비용 채권 노출의 기본기. BlackRock 선호 시 선택.',fits:['채권 기본기','안정','BlackRock']},
+  {ticker:'TLT',name:'20+ Year Treasury Bond ETF',issuer:'BlackRock',type:'bond',ik:'blackrock',div:'~4.5%',freq:'월간',exp:'0.15%',aum:'$50B',risk:3,summary:'20년 이상 장기 미국 국채. 금리 인하 시기에 주가 급등. 금리 민감도 높아 양날의 검. 금리 피크아웃 판단 시 적극 매수 후보.',fits:['장기 국채','금리 인하 수혜','투기적 채권']},
+  {ticker:'SHY',name:'1-3 Year Treasury Bond ETF',issuer:'BlackRock',type:'bond',ik:'blackrock',div:'~4.8%',freq:'월간',exp:'0.15%',aum:'$20B',risk:1,summary:'1~3년 단기 국채. 금리 변동 영향 최소. 현금 대용으로 안전하게 보관하면서 이자 받는 용도. 대기 자금 운용에 적합.',fits:['현금 대용','단기 안전','대기 자금']},
+  {ticker:'HYG',name:'High Yield Corporate Bond ETF',issuer:'BlackRock',type:'bond',ik:'blackrock',div:'~6%',freq:'월간',exp:'0.48%',aum:'$15B',risk:3,summary:'하이일드(정크) 회사채. 채권이지만 수익률 높음. 경기 좋을 때 성과 좋고 경기 침체 때 급락. 채권과 주식의 중간 성격.',fits:['고수익 채권','경기 민감','월간 배당']},
+  // ── 섹터/테마 ──
+  {ticker:'XLK',name:'Technology Select Sector SPDR',issuer:'SPDR',type:'sector',ik:'spdr',div:'~0.7%',freq:'분기',exp:'0.09%',aum:'$60B',risk:4,summary:'S&P500 IT 섹터만 추출. QQQ와 유사하지만 S&P500 기반. 애플·MS 비중이 매우 높음. VGT와 함께 순수 IT 노출 ETF 양대산맥.',fits:['IT 섹터','S&P500 기반','기술주']},
+  {ticker:'XLE',name:'Energy Select Sector SPDR',issuer:'SPDR',type:'sector',ik:'spdr',div:'~3.5%',freq:'분기',exp:'0.09%',aum:'$40B',risk:4,summary:'S&P500 에너지 섹터. 엑손·쉐브론 등 대형 석유 기업. 원유 가격에 연동. 인플레이션 헤지 수단으로 활용. 배당률도 높은 편.',fits:['에너지 노출','인플레이션 헤지','원유 연동']},
+  {ticker:'XLV',name:'Health Care Select Sector SPDR',issuer:'SPDR',type:'sector',ik:'spdr',div:'~1.5%',freq:'분기',exp:'0.09%',aum:'$40B',risk:2,summary:'헬스케어 섹터. 경기 방어적 성격 강함. 고령화 사회 테마. 존슨앤존슨·유나이티드헬스 등 포함.',fits:['방어적','헬스케어','고령화 테마']},
+  {ticker:'SOXX',name:'Semiconductor ETF',issuer:'BlackRock',type:'sector',ik:'blackrock',div:'~1%',freq:'분기',exp:'0.35%',aum:'$15B',risk:5,summary:'반도체 섹터 집중. 엔비디아·TSMC·ASML 등 포함. AI 반도체 붐의 최대 수혜 ETF. 변동성 극심하지만 상승장엔 폭발적.',fits:['반도체 집중','AI 수혜','고위험']},
+  {ticker:'GLD',name:'SPDR Gold Shares',issuer:'SPDR',type:'sector',ik:'spdr',div:'~0%',freq:'없음',exp:'0.40%',aum:'$60B',risk:3,summary:'금(Gold) ETF. 달러 약세·인플레이션 헤지. 주식 하락장에서 역상관 관계. 배당 없음. 안전자산 수요 높을 때 성과 좋음.',fits:['금 투자','인플레이션 헤지','안전자산']},
+  // ── 레버리지 ──
+  {ticker:'TQQQ',name:'UltraPro QQQ',issuer:'ProShares',type:'leverage',ik:'proshares',div:'~0%',freq:'없음',exp:'0.88%',aum:'$20B',risk:5,summary:'나스닥100 3배 레버리지. 나스닥 1% 오르면 3% 오름. 상승장엔 폭발적이지만 하락장엔 원금이 녹아내림. 장기 보유 시 변동성 감쇠 효과로 오히려 손해 가능. 단기 트레이딩용.',fits:['단기 트레이딩','극고위험','상승장 극대화']},
+  {ticker:'UPRO',name:'UltraPro S&P 500',issuer:'ProShares',type:'leverage',ik:'proshares',div:'~0%',freq:'없음',exp:'0.91%',aum:'$4B',risk:5,summary:'S&P500 3배 레버리지. TQQQ의 S&P500 버전. TQQQ보다 상대적 안정적이지만 여전히 극고위험. 장기 보유 금지.',fits:['S&P500 레버리지','단기 트레이딩','극고위험']},
+  {ticker:'SSO',name:'Ultra S&P500',issuer:'ProShares',type:'leverage',ik:'proshares',div:'~0%',freq:'없음',exp:'0.89%',aum:'$5B',risk:4,summary:'S&P500 2배 레버리지. 3배보다 변동성 작지만 여전히 주의 필요. DCA 방식으로 장기 보유하는 투자자들도 있음. 리스크 관리 능력이 있다면 고려 가능.',fits:['S&P500 2배','중위험 레버리지','DCA 가능']},
+  // ── 크립토 ──
+  {ticker:'IBIT',name:'iShares Bitcoin Trust',issuer:'BlackRock',type:'crypto',ik:'blackrock',div:'~0%',freq:'없음',exp:'0.25%',aum:'$50B+',risk:5,summary:'블랙록의 비트코인 현물 ETF. 2024년 승인 후 폭발적 자금 유입. 비트코인 직접 보유 없이 ETF로 투자 가능. 크립토 ETF 중 가장 안정적(그래도 극고위험).',fits:['비트코인 노출','크립토 입문','기관급 운용']},
+  {ticker:'FBTC',name:'Fidelity Wise Origin Bitcoin Fund',issuer:'Fidelity',type:'crypto',ik:'fidelity',div:'~0%',freq:'없음',exp:'0.25%',aum:'$20B+',risk:5,summary:'피델리티 비트코인 현물 ETF. IBIT과 유사. 피델리티 고객 선호. 비트코인 가격에 완전 연동.',fits:['비트코인 노출','피델리티 고객','크립토']},
+  {ticker:'ETHA',name:'iShares Ethereum Trust',issuer:'BlackRock',type:'crypto',ik:'blackrock',div:'~0%',freq:'없음',exp:'0.25%',aum:'$2B',risk:5,summary:'블랙록 이더리움 현물 ETF. 이더리움 가격에 완전 연동. 비트코인보다 변동성 더 큼. 이더리움 생태계 성장 기대할 때.',fits:['이더리움 노출','크립토','블랙록']},
+];
+
+// ===== 필터 상태 =====
+let typeFilter = 'all';
+let issuerFilter = 'all';
+
+function setFilter(kind, val, btn) {
+  if (kind === 'type') {
+    typeFilter = val;
+    document.querySelectorAll('#typeFilters .filter-btn').forEach(b => b.classList.remove('active'));
+  } else {
+    issuerFilter = val;
+    document.querySelectorAll('#issuerFilters .filter-btn').forEach(b => b.classList.remove('active'));
+  }
+  btn.classList.add('active');
+  renderETFs();
+}
+
+function renderETFs() {
+  const search = document.getElementById('etfSearch').value.toLowerCase();
+  const grid = document.getElementById('etfGrid');
+  const count = document.getElementById('etfCount');
+  const filtered = ETFS.filter(e => {
+    const matchType = typeFilter === 'all' || e.type === typeFilter;
+    const matchIssuer = issuerFilter === 'all' || e.ik === issuerFilter;
+    const matchSearch = !search || e.ticker.toLowerCase().includes(search) || e.name.toLowerCase().includes(search) || e.summary.toLowerCase().includes(search);
+    return matchType && matchIssuer && matchSearch;
+  });
+  count.textContent = `${filtered.length}개의 ETF`;
+  if (!filtered.length) { grid.innerHTML = '<div class="empty-state">해당하는 ETF가 없어요</div>'; return; }
+  const riskColors = ['','#2a9444','#1a6bc8','#e8a020','#c8411a','#8b0000'];
+  const typeNames = {cash:'현금흐름',growth:'성장형',blend:'혼합형',bond:'채권형',sector:'섹터/테마',leverage:'레버리지',crypto:'크립토'};
+  grid.innerHTML = filtered.map((e,i) => `
+    <div class="etf-card ${e.type} animate" onclick="toggleETF(this)" style="animation-delay:${Math.min(i,20)*0.03}s">
+      <div class="etf-header">
+        <div>
+          <div class="etf-ticker">${e.ticker}</div>
+          <div class="etf-name">${e.issuer} · ${e.name}</div>
+        </div>
+        <div>
+          <div class="badge badge-${e.type}">${typeNames[e.type]}</div>
+        </div>
+      </div>
+      <div class="etf-stats">
+        <div><div class="stat-label">배당수익률</div><div class="stat-val">${e.div}</div></div>
+        <div><div class="stat-label">배당주기</div><div class="stat-val">${e.freq}</div></div>
+        <div><div class="stat-label">운용보수</div><div class="stat-val">${e.exp}</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+        <span style="font-size:10px;color:var(--muted)">위험도</span>
+        ${[1,2,3,4,5].map(n=>`<div style="width:8px;height:8px;border-radius:50%;background:${n<=e.risk?riskColors[e.risk]:'var(--border)'}"></div>`).join('')}
+        <span style="font-size:10px;color:var(--muted)">AUM ${e.aum}</span>
+      </div>
+      <div class="etf-more">더보기 ∨</div>
+    <div class="etf-summary">${e.summary}</div>
+      <div class="etf-tags">${e.fits.map(f=>`<span class="etf-tag">${f}</span>`).join('')}</div>
+    </div>
+  `).join('');
+}
+
+
+// ===== FIRE 계산기 =====
+function calcFire(){
+  const etfName=document.getElementById('f-etf').value.trim()||'ETF';
+  const shares0=parseFloat(document.getElementById('f-shares').value)||0;
+  const price=parseFloat(document.getElementById('f-price').value);
+  const divRate=parseFloat(document.getElementById('f-div').value)/100;
+  const m1=parseFloat(document.getElementById('f-m1').value)||0;
+  const m2=parseFloat(document.getElementById('f-m2').value)||0;
+  const target=parseFloat(document.getElementById('f-target').value)||500;
+  const fx=parseFloat(document.getElementById('f-fx').value)||1380;
+  if(!price||!divRate){alert('주가와 연 배당률을 입력해주세요!');return;}
+  const TAX=0.154;
+  const priceKRW=price*fx;
+  const mdsps=price*(divRate/12);
+  let shares=shares0;
+  const rows=[];
+  for(let y=1;y<=10;y++){
+    const monthly=y===1?m1:m2;
+    for(let m=0;m<12;m++){
+      const div=shares*mdsps*fx/10000*(1-TAX);
+      shares+=div*10000/priceKRW;
+      shares+=monthly*10000/priceKRW;
+    }
+    const md=shares*mdsps*fx/10000*(1-TAX);
+    rows.push({year:y,shares:Math.round(shares),monthly:md,value:shares*priceKRW/10000});
+  }
+  const curDiv=shares0*mdsps*fx/10000*(1-TAX);
+  const pct=Math.min(100,(curDiv/target)*100);
+  const targetShares=(target/(1-TAX))*10000/(price*fx*divRate/12);
+  document.getElementById('fireResult').style.display='block';
+  document.getElementById('fireStats').innerHTML=`
+    <div class="stat-box r"><div class="sbl">현재 월배당(세후)</div><div class="sbv">${curDiv.toFixed(1)}<small>만</small></div><div class="sbs">${etfName} ${shares0}주</div></div>
+    <div class="stat-box b"><div class="sbl">현재 평가액</div><div class="sbv">${(shares0*priceKRW/10000).toFixed(0)}<small>만</small></div><div class="sbs">$${price} 기준</div></div>
+    <div class="stat-box g"><div class="sbl">목표까지 필요</div><div class="sbv">${Math.max(0,(targetShares-shares0)*priceKRW/10000).toFixed(0)}<small>만</small></div><div class="sbs">약 ${Math.max(0,Math.ceil(targetShares-shares0))}주 추가</div></div>
+  `;
+  document.getElementById('firePct').textContent=pct.toFixed(1)+'%';
+  document.getElementById('fireNow').textContent=`현재 ${curDiv.toFixed(1)}만원`;
+  document.getElementById('fireGoal').textContent=`목표 ${target}만원`;
+  setTimeout(()=>{document.getElementById('fireFill').style.width=pct+'%';},100);
+  let html='<thead><tr><th>연도</th><th>보유 주수</th><th>월 배당(세후)</th><th>총 평가액</th></tr></thead><tbody>';
+  rows.forEach(r=>{
+    const cls=r.monthly>=target?'target':'';
+    const emoji=r.monthly>=target?'🎯 ':'';
+    html+=`<tr class="${cls}"><td>${r.year}년 후</td><td>${r.shares.toLocaleString()}주</td><td>${emoji}${r.monthly.toFixed(0)}만원</td><td>${r.value.toFixed(0)}만원</td></tr>`;
+  });
+  html+='</tbody>';
+  document.getElementById('fireTable').innerHTML=html;
+}
+
+// ===== NAV =====
+function updateNav(){
+  const total=parseFloat(document.getElementById('sl-total').value);
+  const np=parseFloat(document.getElementById('sl-nav').value);
+  const gp=parseFloat(document.getElementById('sl-growth').value);
+  document.getElementById('sv-total').textContent=total;
+  document.getElementById('sv-nav').textContent=np;
+  document.getElementById('sv-growth').textContent=gp;
+  const na=total*np/100,ga=total*gp/100,free=total-na-ga;
+  document.getElementById('navResult').innerHTML=`
+    <div class="nav-row"><span>월 총 배당 (세후)</span><span>${total}만원</span></div>
+    <div class="nav-row"><span>NAV 보완 재투자 (현 ETF 유지)</span><span class="neg">-${na.toFixed(0)}만원</span></div>
+    <div class="nav-row"><span>성장형 ETF 이전 (VOO/QQQ 등)</span><span class="neg">-${ga.toFixed(0)}만원</span></div>
+    <div class="nav-row"><span>실제 자유롭게 쓸 수 있는 돈</span><span class="${free>=0?'pos':'neg'}">${free.toFixed(0)}만원 ${free>=0?'✅':'⚠️'}</span></div>
+    ${free<0?'<div style="font-size:11px;color:var(--accent);margin-top:8px">⚠️ 재투자 비율 합계가 100%를 초과해요!</div>':''}
+  `;
+}
+
+// ===== 시나리오 =====
+function calcScenario(){
+  const aName=document.getElementById('sc-a-name').value.trim()||'종목 A';
+  const bName=document.getElementById('sc-b-name').value.trim()||'종목 B';
+  const ss=parseFloat(document.getElementById('sc-slnh-shares').value)||0;
+  const sp=parseFloat(document.getElementById('sc-slnh-price').value)||0;
+  const qp=parseFloat(document.getElementById('sc-qdte-price').value)||0;
+  const dr=parseFloat(document.getElementById('sc-div').value)/100||0;
+  const m1=parseFloat(document.getElementById('sc-m1').value)||0;
+  const m2=parseFloat(document.getElementById('sc-m2').value)||0;
+  const fx=parseFloat(document.getElementById('sc-fx').value)||1380;
+  if(!qp||!dr){alert('갈아탈 ETF 주가와 배당률을 입력해주세요!');return;}
+  const TAX=0.154;
+  const qkrw=qp*fx;
+  const mdsps=qp*(dr/12);
+  const aVal=ss*sp*fx/10000;
+  const startB=aVal*10000/qkrw;
+  function sim(s0){
+    let s=s0;const rows=[];
+    for(let y=1;y<=5;y++){
+      const m=y===1?m1:m2;
+      for(let mo=0;mo<12;mo++){
+        const d=s*mdsps*fx/10000*(1-TAX);
+        s+=d*10000/qkrw;
+        s+=m*10000/qkrw;
+      }
+      rows.push({year:y,shares:Math.round(s),monthly:s*mdsps*fx/10000*(1-TAX),value:s*qkrw/10000});
+    }
+    return rows;
+  }
+  const rA=sim(0),rB=sim(startB);
+  document.getElementById('scenarioResult').style.display='block';
+  const d5=rB[4].monthly-rA[4].monthly;
+  document.getElementById('scenarioCards').innerHTML=`
+    <div class="sc-card"><div class="sc-title" style="color:var(--accent2)">시나리오 A</div><div style="font-size:12px;color:var(--muted);margin-bottom:10px">${aName} 보유 유지<br>${bName} 0주부터 시작</div><div style="font-size:12px">${aName} 평가액 <b>${aVal.toFixed(0)}만원</b></div><div style="font-size:12px;margin-top:4px">5년 후 월배당 <b style="color:var(--accent2)">${rA[4].monthly.toFixed(0)}만원</b></div></div>
+    <div class="sc-card winner"><div class="sc-title" style="color:var(--accent3)">시나리오 B ✓</div><div style="font-size:12px;color:var(--muted);margin-bottom:10px">${aName} 전량 매도<br>${bName} ${Math.round(startB)}주로 시작</div><div style="font-size:12px">시작 시드 <b>${aVal.toFixed(0)}만원</b></div><div style="font-size:12px;margin-top:4px">5년 후 월배당 <b style="color:var(--accent3)">${rB[4].monthly.toFixed(0)}만원</b></div></div>
+  `;
+  let html='<thead><tr><th>연도</th><th>A 주수</th><th>A 월배당</th><th>B 주수</th><th>B 월배당</th><th>차이</th></tr></thead><tbody>';
+  for(let i=0;i<5;i++){
+    const d=rB[i].monthly-rA[i].monthly;
+    html+=`<tr><td>${i+1}년 후</td><td>${rA[i].shares.toLocaleString()}</td><td>${rA[i].monthly.toFixed(0)}만원</td><td>${rB[i].shares.toLocaleString()}</td><td>${rB[i].monthly.toFixed(0)}만원</td><td class="${d>0?'pos':'neg'}">+${d.toFixed(0)}만원</td></tr>`;
+  }
+  html+='</tbody>';
+  document.getElementById('scenarioTable').innerHTML=html;
+  document.getElementById('scenarioConclusion').innerHTML=`
+    <div class="section-title">결론</div>
+    <div class="info-box">
+      <div class="info-title">💡 B가 5년 후 월 ${d5.toFixed(0)}만원 더 많아요</div>
+      <div class="info-text">
+        현재 보유 종목을 정리하고 배당 ETF에 넣으면 복리 시작점이 높아져서 매년 차이가 벌어져요.<br><br>
+        <b>B 선택:</b> 현재 보유 종목 회복 시점 불확실, 지금 당장 복리 가속하고 싶을 때<br>
+        <b>A 유지:</b> 현재 보유 종목 목표가 임박, 손절이 심리적으로 힘들 때
+      </div>
+    </div>
+  `;
+}
+
+// ===== AI 챗봇 =====
+const AI_SYS=`당신은 FIRE(Financial Independence, Retire Early) 전문 AI 어드바이저입니다.
+전문지식: QDTE/JEPQ/JEPI/VOO/QQQ/SCHD 등 ETF 전반, 한국 세금(배당소득세 15.4%, 금융소득종합과세 2000만원), 커버드콜 NAV 메커니즘, 현금흐름형 vs 성장형 전략, 복리 재투자
+스타일: 친근하고 솔직하게, 숫자로 구체적으로, 현실적 조언, 한국어, 핵심만 간결하게
+사용자가 어떤 ETF를 보유하든 맞춤 FIRE 전략을 짜줄 수 있음. 투자 리스크 항상 명시. 최종 결정은 사용자가 직접.`;
+let chatMsgs=[];
+let chatLoading=false;
+
+function addChatMsg(role,text,qbtns=[]){
+  const area=document.getElementById('chatArea');
+  const div=document.createElement('div');
+  div.className=`cmsg ${role}`;
+  const fmt=text.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
+  const qhtml=qbtns.length?`<div class="cquick">${qbtns.map(b=>`<button class="cqbtn" onclick="quickChat('${b.replace(/'/g,"&#39;")}')">${b}</button>`).join('')}</div>`:'';
+  div.innerHTML=`<div class="cmsg-av">${role==='ai'?'🔥':'👤'}</div><div class="cmsg-bub">${fmt}${qhtml}</div>`;
+  area.appendChild(div);
+  area.scrollTop=area.scrollHeight;
+}
+
+async function sendChatMsg(text){
+  const input=document.getElementById('chatInput');
+  const msg=text||input.value.trim();
+  if(!msg||chatLoading)return;
+  input.value='';autoChatResize(input);
+  chatLoading=true;
+  document.getElementById('chatSendBtn').disabled=true;
+  addChatMsg('user',msg);
+  chatMsgs.push({role:'user',content:msg});
+  const area=document.getElementById('chatArea');
+  const tdiv=document.createElement('div');
+  tdiv.className='cmsg ai';tdiv.id='ctyping';
+  tdiv.innerHTML=`<div class="cmsg-av">AI</div><div class="cmsg-bub"><div class="ctyping"><span></span><span></span><span></span></div></div>`;
+  area.appendChild(tdiv);area.scrollTop=area.scrollHeight;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','anthropic-dangerous-allow-browser':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:AI_SYS,messages:chatMsgs})});
+    const data=await res.json();
+    document.getElementById('ctyping')?.remove();
+    const reply=data.content?.[0]?.text||'오류가 났어요. 다시 시도해주세요.';
+    chatMsgs.push({role:'assistant',content:reply});
+    const btns=reply.split('\n').filter(l=>/^[①②③④1-4]\.\s/.test(l)).map(l=>l.replace(/^[①②③④1-4]\.\s*/,'')).filter(l=>l.length<35).slice(0,4);
+    addChatMsg('ai',reply,btns);
+  }catch(e){
+    document.getElementById('ctyping')?.remove();
+    addChatMsg('ai','네트워크 오류가 났어요. 잠시 후 다시 시도해주세요 🙏');
+  }
+  chatLoading=false;
+  document.getElementById('chatSendBtn').disabled=false;
+}
+function quickChat(t){sendChatMsg(t);}
+function handleChatKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChatMsg();}}
+function autoChatResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,100)+'px';}
+function resetChat(){chatMsgs=[];document.getElementById('chatArea').innerHTML='';initChat();}
+function initChat(){
+  addChatMsg('ai','안녕하세요! FIRE 전략 AI예요 🔥\n\n여러분 상황에 딱 맞는 투자 전략을 함께 짜드릴게요.\n어디서부터 시작할까요?',
+    ['처음부터 전략 짜고 싶어요','QDTE가 뭔지 궁금해요','나한테 맞는 ETF가 뭔지 모르겠어요','FIRE까지 얼마나 걸릴지 알고 싶어요']);
+}
+
+// ===== 탭 전환 =====
+function switchTab(name,el){
+  const c=document.querySelector('.content');if(c)c.scrollTop=0;
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.bnav-item').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  el.classList.add('active');
+  if(name==='ai'&&chatMsgs.length===0)initChat();
+}
+
+// ===== 초기화 =====
+renderETFs();
+// renderDiary from base
+updateNav();
+
+
+// ── renderDiary override: 월별 그룹핑 ──
+function renderDiary() {
+  const list = document.getElementById('diaryList');
+  if (!list) return;
+  if (!diary.length) {
+    list.innerHTML = `<div class="empty-state">아직 기록이 없어요<br><span style="font-size:11px;color:var(--muted2);display:block;margin-top:10px;line-height:2">오늘 산 종목, 이유, 시장 분위기를<br>자유롭게 적어보세요</span></div>`;
+    return;
+  }
+  const fmtDate = (d) => {
+    const dt = new Date(d + 'T00:00:00');
+    const days = ['일','월','화','수','목','금','토'];
+    return dt.getFullYear()+'.'+String(dt.getMonth()+1).padStart(2,'0')+'.'+String(dt.getDate()).padStart(2,'0')+' '+days[dt.getDay()];
+  };
+  let html = ''; let lastMonth = '';
+  diary.forEach(e => {
+    const mk = e.date ? e.date.slice(0,7) : '';
+    if (mk !== lastMonth) {
+      const [y,m] = mk.split('-');
+      const sep = lastMonth ? 'border-top:1px solid rgba(188,174,144,0.25)' : '';
+      html += '<div style="font-size:9px;color:var(--muted2);letter-spacing:0.2em;text-transform:uppercase;padding:22px 0 10px;'+sep+'">' + (y||'') + '년 ' + (parseInt(m)||'') + '월</div>';
+      lastMonth = mk;
+    }
+    html += '<div class="diary-item ' + (editingId===e.id?'editing':'') + '">'
+      + '<div class="diary-item-date">' + fmtDate(e.date) + '</div>'
+      + '<div class="diary-item-top"><div class="diary-ticker">' + e.ticker.toUpperCase() + '</div>'
+      + '<div class="diary-actions">'
+      + '<button class="edit-btn" onclick="editDiary(' + e.id + ');event.stopPropagation()">수정</button>'
+      + '<button class="del-btn" onclick="deleteDiary(' + e.id + ');event.stopPropagation()">삭제</button>'
+      + '</div></div>'
+      + (e.shares||e.price ? '<div class="diary-meta">'
+        + (e.shares ? '<span>'+e.shares+'주</span>' : '')
+        + (e.price ? '<span>$'+e.price+'</span>' : '')
+        + (e.shares&&e.price ? '<span>합계 $'+(e.shares*e.price).toFixed(0)+'</span>' : '')
+        + '</div>' : '')
+      + (e.note ? '<div class="diary-note">'+e.note.replace(/\n/g,'<br>')+'</div>' : '')
+      + '</div>';
+  });
+  list.innerHTML = html;
+}
+
+// ── Init ──
+(function() {
+  const dateEl = document.getElementById('d-date');
+  if (dateEl && !dateEl.value) {
+    dateEl.value = new Date().toISOString().split('T')[0];
+    if (typeof updateDiaryDate === 'function') updateDiaryDate();
+  }
+  if (typeof renderETFs === 'function') renderETFs();
+  if (typeof renderDiary === 'function') renderDiary();
+  if (typeof updateNav === 'function') updateNav();
+})();
+
+</script>
+</body>
+</html>
