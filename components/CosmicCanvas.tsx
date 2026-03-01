@@ -1,264 +1,286 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
-export default function CosmicCanvas() {
+const VERT = /* glsl */ `
+attribute vec2 position;
+varying vec2 vUv;
+void main() {
+  vUv = position * 0.5 + 0.5;
+  gl_Position = vec4(position, 0.0, 1.0);
+}
+`;
+
+const FRAG = /* glsl */ `
+precision highp float;
+varying vec2 vUv;
+uniform float uTime;
+uniform vec2 uResolution;
+uniform vec2 uMouse;
+uniform float uEvolution;
+// Seamless Perlin/Simplex-like noise (inexpensive)
+vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec3 permute(vec3 x) { return mod289(((x*34.0)+10.0)*x); }
+float snoise(vec2 v) {
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                       -0.577350269189626, 0.024390243902439);
+    vec2 i  = floor(v + dot(v, C.yy) );
+    vec2 x0 = v -   i + dot(i, C.xx);
+    vec2 i1;
+    i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    vec4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    i = mod289(i);
+    vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
+        + i.x + vec3(0.0, i1.x, 1.0 ));
+    vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+    m = m*m; m = m*m;
+    vec3 x = 2.0 * fract(p * C.www) - 1.0;
+    vec3 h = abs(x) - 0.5;
+    vec3 ox = floor(x + 0.5);
+    vec3 a0 = x - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+    vec3 g;
+    g.x  = a0.x  * x0.x  + h.x  * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
+}
+
+float fbm(vec2 p) {
+    float f = 0.0;
+    float w = 0.5;
+    for (int i = 0; i < 5; i++) {
+        f += w * snoise(p);
+        p = p * 2.0 + vec2(100.0);
+        w *= 0.5;
+    }
+    return f;
+}
+
+// Ridged multifractal for lightning/energy veins
+float ridge(vec2 p, float offset) {
+    float sum = 0.0;
+    float w = 0.5;
+    float prev = 1.0;
+    for(int i = 0; i < 4; i++) {
+        float n = abs(snoise(p));
+        n = offset - n;
+        n = n * n;
+        sum += n * w * prev;
+        prev = n;
+        p *= 2.0;
+        w *= 0.5;
+    }
+    return sum;
+}
+
+void main() {
+    // 1. Normalized coordinates (-1 to 1) centering on screen
+    vec2 p = (vUv - 0.5) * 2.0;
+    p.x *= uResolution.x / uResolution.y;
+
+    // Mouse parallax offset
+    vec2 mouseOffset = (uMouse - 0.5) * 0.15;
+    p += mouseOffset;
+
+    float distToCenter = length(p);
+    
+    // Time and evolution (Scale uEvolution slower so it takes longer to fill)
+    float t = uTime * 0.15;
+    float eLevel = clamp(uEvolution * 0.1, 0.0, 1.5);
+    float eSpeed = 1.0 + eLevel;
+
+    // Fluid domain warping for organic plasma flow
+    vec2 q = vec2(fbm(p + vec2(t * 0.5)), fbm(p + vec2(-t * 0.4, t * 0.3)));
+    vec2 r = vec2(fbm(p + q * 2.0 + vec2(t * eSpeed)), fbm(p + q * 2.5 - vec2(t * eSpeed * 0.8)));
+
+    float f = fbm(p + r * 2.0 + t);
+
+    // Deep purple to violet liquid base
+    vec3 plasmaBase = mix(vec3(0.01, 0.0, 0.05), vec3(0.08, 0.01, 0.15), f);
+    
+    // Cyan/Pink swirling highlights (The logo colors)
+    vec3 c1 = vec3(0.8, 0.1, 0.6) * smoothstep(0.0, 1.0, r.x) * 0.5;
+    vec3 c2 = vec3(0.1, 0.6, 0.9) * smoothstep(0.0, 1.0, r.y) * 0.4;
+    vec3 highlight = c1 + c2;
+
+    // Brilliant organic energy veins (The neural/timeline network)
+    float veins = ridge(p * (2.0 - eLevel*0.2) + r * 1.5 - vec2(t * eSpeed), 0.9);
+    veins = pow(veins, 2.5); // Sharpen the glowing lines
+    
+    // Core vein color (Gold / Pink / Cyan)
+    vec3 veinColor = mix(vec3(0.9, 0.3, 1.0), vec3(0.4, 0.9, 1.0), fbm(p*3.0));
+    
+    // Combine features for the "Universe Structure"
+    vec3 universeColor = plasmaBase + highlight + (veinColor * veins * 4.0 * (0.5 + eLevel));
+
+    // --- The Expansion Mask ---
+    // At eLevel = 0, radius is tiny. Expands organically as eLevel goes up.
+    float universeRadius = 0.05 + eLevel * 1.5; 
+    
+    // Make the expanding edge organic and fractal, not a perfect circle
+    float edgeNoise = fbm(p * 2.0 - t * 0.5) * 0.5;
+    float organicDist = distToCenter + edgeNoise * 0.5 - 0.1;
+    
+    // Fade out the universe structure completely outside the expanding mask
+    float expansionMask = smoothstep(universeRadius, max(0.0, universeRadius - 0.5), organicDist);
+
+    // Hard mask to force pure darkness outside the evolving bubble
+    vec3 finalColor = universeColor * expansionMask;
+
+    // Big Bang Spark: Always present at the center, representing the Origin
+    float spark = smoothstep(0.02, 0.0, distToCenter);
+    float sparkGlow = smoothstep(0.3 + eLevel*0.5, 0.0, distToCenter) * 0.2;
+    vec3 centerColor = vec3(1.0, 0.9, 1.0) * spark + vec3(0.3, 0.5, 0.9) * sparkGlow;
+    
+    finalColor += centerColor;
+
+    // Vignette
+    finalColor *= smoothstep(2.5, 0.5, distToCenter);
+
+    // HDR Soft Tonemapping
+    finalColor = 1.0 - exp(-finalColor * 1.5);
+    
+    gl_FragColor = vec4(finalColor, 1.0);
+}
+`;
+
+export default function CosmicCanvas({ evolutionLevel = 0 }: { evolutionLevel?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animRef = useRef<number>(0);
+  const [glError, setGlError] = useState<string | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
-    if (!ctx) return;
+    const gl = canvas.getContext("webgl", { alpha: false, antialias: false });
+    if (!gl) return;
 
-    let width = window.innerWidth;
-    let height = window.innerHeight;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const vs = gl.createShader(gl.VERTEX_SHADER);
+    if (!vs) return;
+    gl.shaderSource(vs, VERT);
+    gl.compileShader(vs);
+    if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+      const err = gl.getShaderInfoLog(vs);
+      console.error("Vertex Shader failed:", err);
+      setGlError("Vertex Shader failed: " + err);
+      gl.deleteShader(vs);
+      return;
+    }
 
-    const resize = () => {
-      width = window.innerWidth;
-      height = window.innerHeight;
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const fs = gl.createShader(gl.FRAGMENT_SHADER);
+    if (!fs) return;
+    gl.shaderSource(fs, FRAG);
+    gl.compileShader(fs);
+    if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+      const err = gl.getShaderInfoLog(fs);
+      console.error("Fragment Shader failed:", err);
+      setGlError("Fragment Shader failed: " + err);
+      gl.deleteShader(fs);
+      return;
+    }
+
+    const prog = gl.createProgram();
+    if (!prog) return;
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      const err = gl.getProgramInfoLog(prog);
+      console.error("Program Link failed:", err);
+      setGlError("Program Link failed: " + err);
+      gl.deleteProgram(prog);
+      return;
+    }
+    gl.useProgram(prog);
+
+    // Quad geometry
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
+      gl.STATIC_DRAW
+    );
+
+    const posLoc = gl.getAttribLocation(prog, "position");
+    gl.enableVertexAttribArray(posLoc);
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+    const uTime = gl.getUniformLocation(prog, "uTime");
+    const uRes = gl.getUniformLocation(prog, "uResolution");
+    const uMouse = gl.getUniformLocation(prog, "uMouse");
+    const uEvolution = gl.getUniformLocation(prog, "uEvolution");
+
+    // Mouse tracking
+    let mouseX = 0.5;
+    let mouseY = 0.5;
+    let targetMouseX = 0.5;
+    let targetMouseY = 0.5;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      targetMouseX = e.clientX / window.innerWidth;
+      targetMouseY = 1.0 - e.clientY / window.innerHeight; // WebGL Y is flipped
     };
-    resize();
-    window.addEventListener("resize", resize);
+    window.addEventListener("mousemove", handleMouseMove);
 
-    const cx = width / 2;
-    const cy = height / 2;
+    // Render loop
+    let animFrame = 0;
+    const startTime = performance.now();
 
-    // ── Premium stars with glow ──
-    interface Star {
-      x: number; y: number;
-      size: number;
-      glowSize: number;
-      speed: number; phase: number;
-      r: number; g: number; b: number;
-      hasFlare: boolean;
-    }
+    const render = () => {
+      if (!canvas) return;
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-    const stars: Star[] = [];
-    // Tiny dim dust (lots)
-    for (let i = 0; i < 180; i++) {
-      stars.push({
-        x: Math.random() * width, y: Math.random() * height,
-        size: Math.random() * 0.8 + 0.3,
-        glowSize: 0,
-        speed: 0.3 + Math.random() * 0.5,
-        phase: Math.random() * Math.PI * 2,
-        r: 200 + Math.random() * 55, g: 200 + Math.random() * 55, b: 220 + Math.random() * 35,
-        hasFlare: false,
-      });
-    }
-    // Medium stars with subtle glow
-    for (let i = 0; i < 40; i++) {
-      stars.push({
-        x: Math.random() * width, y: Math.random() * height,
-        size: Math.random() * 1.2 + 0.8,
-        glowSize: 4 + Math.random() * 4,
-        speed: 0.2 + Math.random() * 0.4,
-        phase: Math.random() * Math.PI * 2,
-        r: 230 + Math.random() * 25, g: 225 + Math.random() * 30, b: 240,
-        hasFlare: false,
-      });
-    }
-    // Bright stars with cross flare
-    for (let i = 0; i < 12; i++) {
-      const isGold = Math.random() > 0.5;
-      stars.push({
-        x: Math.random() * width, y: Math.random() * height,
-        size: Math.random() * 1.5 + 1.5,
-        glowSize: 10 + Math.random() * 8,
-        speed: 0.15 + Math.random() * 0.3,
-        phase: Math.random() * Math.PI * 2,
-        r: isGold ? 212 : 200, g: isGold ? 168 : 190, b: isGold ? 83 : 255,
-        hasFlare: true,
-      });
-    }
-
-    // ── Particles emanating from center ──
-    interface Particle {
-      angle: number;
-      dist: number;
-      speed: number;
-      maxDist: number;
-      size: number;
-      opacity: number;
-      hue: number; // 0 = gold, 1 = purple
-    }
-
-    const maxParticleDist = Math.max(width, height) * 0.55;
-    const particleCount = width < 768 ? 50 : 80;
-    const particles: Particle[] = [];
-    for (let i = 0; i < particleCount; i++) {
-      particles.push({
-        angle: Math.random() * Math.PI * 2,
-        dist: Math.random() * maxParticleDist,
-        speed: 0.15 + Math.random() * 0.4,
-        maxDist: maxParticleDist * (0.7 + Math.random() * 0.3),
-        size: 1 + Math.random() * 2,
-        opacity: 0.3 + Math.random() * 0.7,
-        hue: Math.random() > 0.3 ? 0 : 1,
-      });
-    }
-
-    let time = 0;
-
-    function draw() {
-      time += 0.006;
-      ctx.clearRect(0, 0, width, height);
-
-      // Background — subtle radial gradient
-      const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, height) * 0.7);
-      bg.addColorStop(0, "#0c081e");
-      bg.addColorStop(0.4, "#000000");
-      bg.addColorStop(1, "#06041a");
-      ctx.fillStyle = bg;
-      ctx.fillRect(0, 0, width, height);
-
-      // ── Stars ──
-      for (const s of stars) {
-        const twinkle = Math.sin(time * s.speed * 2 + s.phase) * 0.35 + 0.65;
-        const alpha = twinkle;
-
-        // Soft glow halo
-        if (s.glowSize > 0) {
-          const glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.glowSize);
-          glow.addColorStop(0, `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha * 0.15})`);
-          glow.addColorStop(1, "transparent");
-          ctx.fillStyle = glow;
-          ctx.fillRect(s.x - s.glowSize, s.y - s.glowSize, s.glowSize * 2, s.glowSize * 2);
-        }
-
-        // Cross flare for bright stars
-        if (s.hasFlare) {
-          const flareLen = s.size * 6 * twinkle;
-          const flareAlpha = alpha * 0.25;
-          ctx.strokeStyle = `rgba(${s.r}, ${s.g}, ${s.b}, ${flareAlpha})`;
-          ctx.lineWidth = 0.5;
-          ctx.beginPath();
-          ctx.moveTo(s.x - flareLen, s.y);
-          ctx.lineTo(s.x + flareLen, s.y);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(s.x, s.y - flareLen);
-          ctx.lineTo(s.x, s.y + flareLen);
-          ctx.stroke();
-        }
-
-        // Star dot
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${s.r}, ${s.g}, ${s.b}, ${alpha})`;
-        ctx.fill();
+      if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        gl.viewport(0, 0, canvas.width, canvas.height);
       }
 
-      // ── Center glow ──
-      const pulse = Math.sin(time * 0.35) * 0.1 + 1;
+      // Smooth mouse
+      mouseX += (targetMouseX - mouseX) * 0.05;
+      mouseY += (targetMouseY - mouseY) * 0.05;
 
-      // Wide halo
-      const haloR = Math.min(width, height) * 0.4 * pulse;
-      const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, haloR);
-      halo.addColorStop(0, "rgba(212, 168, 83, 0.07)");
-      halo.addColorStop(0.3, "rgba(140, 100, 200, 0.02)");
-      halo.addColorStop(1, "transparent");
-      ctx.fillStyle = halo;
-      ctx.fillRect(0, 0, width, height);
+      gl.uniform1f(uTime, (performance.now() - startTime) * 0.001);
+      gl.uniform2f(uRes, canvas.width, canvas.height);
+      gl.uniform2f(uMouse, mouseX, mouseY);
+      gl.uniform1f(uEvolution, evolutionLevel);
 
-      // Warm mid glow
-      const midR = 130 * pulse;
-      const mid = ctx.createRadialGradient(cx, cy, 0, cx, cy, midR);
-      mid.addColorStop(0, "rgba(255, 220, 140, 0.4)");
-      mid.addColorStop(0.2, "rgba(212, 168, 83, 0.2)");
-      mid.addColorStop(0.5, "rgba(212, 168, 83, 0.05)");
-      mid.addColorStop(1, "transparent");
-      ctx.fillStyle = mid;
-      ctx.fillRect(cx - midR, cy - midR, midR * 2, midR * 2);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      animFrame = requestAnimationFrame(render);
+    };
 
-      // Hot core
-      const hotR = 40 + Math.sin(time * 0.5) * 6;
-      const hot = ctx.createRadialGradient(cx, cy, 0, cx, cy, hotR);
-      hot.addColorStop(0, "rgba(255, 250, 240, 1)");
-      hot.addColorStop(0.12, "rgba(255, 240, 210, 0.85)");
-      hot.addColorStop(0.35, "rgba(255, 200, 120, 0.35)");
-      hot.addColorStop(0.7, "rgba(212, 168, 83, 0.06)");
-      hot.addColorStop(1, "transparent");
-      ctx.fillStyle = hot;
-      ctx.fillRect(cx - hotR, cy - hotR, hotR * 2, hotR * 2);
-
-      // White pinpoint
-      const pinR = 10 + Math.sin(time * 0.7) * 2;
-      const pin = ctx.createRadialGradient(cx, cy, 0, cx, cy, pinR);
-      pin.addColorStop(0, "rgba(255, 255, 255, 1)");
-      pin.addColorStop(0.5, "rgba(255, 248, 230, 0.6)");
-      pin.addColorStop(1, "transparent");
-      ctx.fillStyle = pin;
-      ctx.fillRect(cx - pinR, cy - pinR, pinR * 2, pinR * 2);
-
-      // ── Particles radiating outward ──
-      ctx.globalCompositeOperation = "lighter";
-
-      for (const p of particles) {
-        p.dist += p.speed;
-        if (p.dist > p.maxDist) {
-          p.dist = 0;
-          p.angle = Math.random() * Math.PI * 2;
-          p.opacity = 0.3 + Math.random() * 0.7;
-        }
-
-        const px = cx + Math.cos(p.angle) * p.dist;
-        const py = cy + Math.sin(p.angle) * p.dist;
-
-        // Fade: bright near center, fade out at edges
-        const lifeT = p.dist / p.maxDist;
-        const fadeIn = Math.min(1, lifeT * 8);
-        const fadeOut = 1 - lifeT;
-        const alpha = fadeIn * fadeOut * fadeOut * p.opacity;
-
-        if (alpha < 0.01) continue;
-
-        const isGold = p.hue === 0;
-        const r = isGold ? 255 : 200;
-        const g = isGold ? 220 : 170;
-        const b = isGold ? 150 : 255;
-
-        // Soft glow
-        const glowR = p.size * 5;
-        const glow = ctx.createRadialGradient(px, py, 0, px, py, glowR);
-        glow.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${alpha * 0.3})`);
-        glow.addColorStop(1, "transparent");
-        ctx.fillStyle = glow;
-        ctx.fillRect(px - glowR, py - glowR, glowR * 2, glowR * 2);
-
-        // Dot
-        ctx.beginPath();
-        ctx.arc(px, py, p.size * (0.3 + fadeOut * 0.7), 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha * 0.9})`;
-        ctx.fill();
-      }
-
-      ctx.globalCompositeOperation = "source-over";
-
-      animRef.current = requestAnimationFrame(draw);
-    }
-
-    animRef.current = requestAnimationFrame(draw);
+    render();
 
     return () => {
-      cancelAnimationFrame(animRef.current);
-      window.removeEventListener("resize", resize);
+      cancelAnimationFrame(animFrame);
+      window.removeEventListener("mousemove", handleMouseMove);
+      gl.deleteBuffer(buf);
+      gl.deleteProgram(prog);
+      gl.deleteShader(vs);
+      gl.deleteShader(fs);
     };
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="fixed inset-0 w-full h-full"
-      style={{ zIndex: 0 }}
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        className="fixed inset-0 w-full h-full"
+        style={{ zIndex: 0, pointerEvents: "none", background: "transparent" }}
+      />
+      {glError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 pointer-events-none">
+          <div className="bg-red-900/90 text-white font-mono text-xs p-4 rounded-xl max-w-2xl break-all">
+            <strong>WebGL Compiled Error:</strong>
+            <br />
+            {glError}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

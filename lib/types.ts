@@ -33,6 +33,8 @@ export interface ChatMessage {
 // ── 분기점 데이터 ──
 export interface BranchPointData {
   timeLabel: string;
+  nodeTitle?: string; // 맵에 표시될 짧은 요약 (예: 스마트팜 완공)
+  badge?: string;     // 성취 뱃지 이모지 (예: 🌱)
   summary: string;
   choices: Choice[];
   chosenIndex?: number;

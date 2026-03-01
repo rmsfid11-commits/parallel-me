@@ -47,7 +47,7 @@ export default function ChatPanel({
   useEffect(() => {
     setIsMobile(
       /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
-        window.innerWidth < 768
+      window.innerWidth < 768
     );
   }, []);
 
@@ -247,8 +247,7 @@ export default function ChatPanel({
     <div
       className="flex flex-col h-full relative"
       style={{
-        background:
-          "linear-gradient(to bottom, rgba(2,2,8,0.75) 0%, rgba(2,2,8,0.88) 30%, rgba(2,2,8,0.92) 100%)",
+        background: "transparent",
       }}
     >
       {/* Messages area */}

@@ -239,6 +239,22 @@ function generateSajuSummary(
   return summary;
 }
 
+// 일진 계산을 위한 기준일: 1900년 1월 1일은 갑술(甲戌)일 (갑=0, 술=10)
+function getDayPillarIndices(year: number, month: number, day: number): { stemIdx: number, branchIdx: number } {
+  // Use UTC to avoid timezone issues
+  const baseDate = new Date(Date.UTC(1900, 0, 1)); // 1900-01-01
+  const targetDate = new Date(Date.UTC(year, month - 1, day));
+
+  const diffTime = targetDate.getTime() - baseDate.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+  // 1900-01-01 is Gap-Sul (甲戌) -> Stem 0, Branch 10
+  const stemIdx = ((0 + diffDays) % 10 + 10) % 10;
+  const branchIdx = ((10 + diffDays) % 12 + 12) % 12;
+
+  return { stemIdx, branchIdx };
+}
+
 export function calculateSaju(birthday: string, birthTime?: string): SajuResult {
   const date = parseDate(birthday);
   if (!date) {
@@ -253,8 +269,8 @@ export function calculateSaju(birthday: string, birthTime?: string): SajuResult 
   const hour = birthTime ? parseTime(birthTime) : null;
 
   // Year Pillar
-  const yearStemIdx = (year - 4) % 10;
-  const yearBranchIdx = (year - 4) % 12;
+  const yearStemIdx = (year - 4 + 10) % 10;
+  const yearBranchIdx = (year - 4 + 12) % 12;
 
   // Month Pillar
   const monthIdx = solarMonth(month, day);
@@ -262,13 +278,8 @@ export function calculateSaju(birthday: string, birthTime?: string): SajuResult 
   const monthStemStart = getMonthStemStart(yearStemIdx);
   const monthStemIdx = (monthStemStart + monthIdx) % 10;
 
-  // Day Pillar (Julian Day)
-  const jdn = toJDN(year, month, day);
-  // Calibrated: 2000-01-01 = 갑진(甲辰) → stem=0, branch=4
-  // JDN(2000-01-01) = 2451545
-  // stem: (2451545 + 5) % 10 = 0 ✓, branch: (2451545 - 1) % 12 = 4 ✓
-  const dayStemIdx = (jdn + 5) % 10;
-  const dayBranchIdx = (jdn - 1) % 12;
+  // Day Pillar
+  const { stemIdx: dayStemIdx, branchIdx: dayBranchIdx } = getDayPillarIndices(year, month, day);
 
   // Hour Pillar
   let hourStemIdx = -1;

@@ -12,6 +12,7 @@ import {
   type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { toPng } from "html-to-image";
 
 import {
   UserProfile,
@@ -19,11 +20,12 @@ import {
   Timeline,
   SimulationSession,
 } from "@/lib/types";
+import { useSimulationStore } from "@/app/store/simulation";
 import ScenarioNode, { type ScenarioNodeData } from "@/components/ScenarioNode";
 
 const nodeTypes = { scenario: ScenarioNode };
 import ChatPanel from "@/components/ChatPanel";
-import StarField from "@/components/StarField";
+import CosmicCanvas from "@/components/CosmicCanvas";
 import ForkEffect from "@/components/ForkEffect";
 import { getLayoutedElements } from "@/lib/layout";
 import {
@@ -302,20 +304,27 @@ function SimulationCanvas() {
   const router = useRouter();
   const { fitView } = useReactFlow();
 
-  // Profile
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  // Zustand State
+  const profile = useSimulationStore((state) => state.profile);
+  const setProfile = useSimulationStore((state) => state.setProfile);
+  const timelines = useSimulationStore((state) => state.timelines);
+  const activeTimelineId = useSimulationStore((state) => state.activeTimelineId);
+  const setActiveTimelineId = useSimulationStore((state) => state.setActiveTimelineId);
+  const setTimelines = useSimulationStore((state) => state.setTimelines);
 
-  // Timelines
-  const [timelines, setTimelines] = useState<Timeline[]>([]);
-  const [activeTimelineId, setActiveTimelineId] = useState<string>("");
-  const timelinesRef = useRef<Timeline[]>([]);
-  const activeTimelineIdRef = useRef("");
-  timelinesRef.current = timelines;
-  activeTimelineIdRef.current = activeTimelineId;
+  const sessions = useSimulationStore((state) => state.sessions);
+  const setSessions = useSimulationStore((state) => state.setSessions);
+  const activeSessionId = useSimulationStore((state) => state.activeSessionId);
+  const setActiveSessionId = useSimulationStore((state) => state.setActiveSessionId);
 
-  // Sessions
-  const [sessions, setSessions] = useState<SimulationSession[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string>("");
+  const getActiveMessages = useSimulationStore((state) => state.getActiveMessages);
+  const updateTimelineMessages = useSimulationStore((state) => state.updateTimelineMessages);
+
+  const handleSwitchSessionStr = useSimulationStore((state) => state.switchSession);
+  const handleNewSessionStr = useSimulationStore((state) => state.createSession);
+  const handleDeleteSessionStr = useSimulationStore((state) => state.deleteSession);
+  const handleRewindStr = useSimulationStore((state) => state.rewindTimeline);
+
   const [showSessionDrawer, setShowSessionDrawer] = useState(false);
 
   // UI state
@@ -387,124 +396,38 @@ function SimulationCanvas() {
     }
   }, []);
 
-  // ── Load profile + sessions ──
+  // ── Load profile + sessions (Migration logic just for first load) ──
   useEffect(() => {
-    const stored = localStorage.getItem("parallelme-profile");
-    if (!stored) {
-      router.push("/");
-      return;
-    }
-    try {
-      const p = JSON.parse(stored) as UserProfile;
-      setProfile(p);
+    // Wait for hydration by checking if zustand has loaded it from localStorage
+    const p = useSimulationStore.getState().profile;
 
-      // 1) Try loading sessions
-      const savedSessions = localStorage.getItem("parallelme-sessions");
-      if (savedSessions) {
-        try {
-          const parsed = JSON.parse(savedSessions) as {
-            sessions: SimulationSession[];
-            activeSessionId: string;
-          };
-          if (parsed.sessions && parsed.sessions.length > 0) {
-            setSessions(parsed.sessions);
-            const activeId =
-              parsed.activeSessionId || parsed.sessions[0].id;
-            setActiveSessionId(activeId);
-            const active =
-              parsed.sessions.find((s) => s.id === activeId) ||
-              parsed.sessions[0];
-            setTimelines(active.timelines);
-            setActiveTimelineId(
-              active.activeTimelineId || active.timelines[0]?.id || ""
-            );
-            return;
-          }
-        } catch {
-          // ignore, fall through
-        }
+    // If zustand hasn't loaded it, try the raw localStorage (first open case)
+    if (!p) {
+      const stored = localStorage.getItem("parallelme-profile");
+      if (!stored) {
+        router.push("/");
+        return;
       }
+      try {
+        const parsedP = JSON.parse(stored) as UserProfile;
+        setProfile(parsedP);
 
-      // 2) Legacy migration: parallelme-simulation → session
-      const savedSim = localStorage.getItem("parallelme-simulation");
-      if (savedSim) {
-        try {
-          const {
-            timelines: savedTl,
-            activeTimelineId: savedAtl,
-          } = JSON.parse(savedSim);
-          if (savedTl && savedTl.length > 0) {
-            const session: SimulationSession = {
-              id: crypto.randomUUID(),
-              name: `${p.mode} · ${new Date().toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}`,
-              timelines: savedTl,
-              activeTimelineId: savedAtl || savedTl[0].id,
-              createdAt: Date.now(),
-              msgCount: (savedTl as Timeline[]).flatMap(
-                (t) => t.messages
-              ).length,
-            };
-            setSessions([session]);
-            setActiveSessionId(session.id);
-            setTimelines(savedTl);
-            setActiveTimelineId(savedAtl || savedTl[0].id);
-            localStorage.removeItem("parallelme-simulation");
-            return;
-          }
-        } catch {
-          // ignore
+        // Initial session check
+        if (sessions.length === 0) {
+          handleNewSessionStr();
         }
+      } catch (e) {
+        router.push("/");
       }
-
-      // 3) Fresh start
-      const tl: Timeline = {
-        id: crypto.randomUUID(),
-        parentTimelineId: null,
-        branchPointMsgId: "",
-        choiceIndex: -1,
-        messages: [],
-      };
-      const session: SimulationSession = {
-        id: crypto.randomUUID(),
-        name: `${p.mode} · ${new Date().toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}`,
-        timelines: [tl],
-        activeTimelineId: tl.id,
-        createdAt: Date.now(),
-        msgCount: 0,
-      };
-      setSessions([session]);
-      setActiveSessionId(session.id);
-      setTimelines([tl]);
-      setActiveTimelineId(tl.id);
-    } catch {
-      router.push("/");
     }
-  }, [router]);
+  }, [router, setProfile, sessions.length, handleNewSessionStr]);
 
-  // ── Persist sessions ──
-  useEffect(() => {
-    if (sessions.length > 0 && activeSessionId && timelines.length > 0) {
-      const updatedSessions = sessions.map((s) =>
-        s.id === activeSessionId
-          ? {
-              ...s,
-              timelines,
-              activeTimelineId,
-              msgCount: timelines.flatMap((t) => t.messages).length,
-            }
-          : s
-      );
-      localStorage.setItem(
-        "parallelme-sessions",
-        JSON.stringify({ sessions: updatedSessions, activeSessionId })
-      );
-    }
-  }, [timelines, activeTimelineId, sessions, activeSessionId]);
+
 
   // ── beforeunload protection ──
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      const msgs = timelinesRef.current.flatMap((t) => t.messages);
+      const msgs = useSimulationStore.getState().timelines.flatMap((t) => t.messages);
       if (msgs.length > 0) {
         e.preventDefault();
       }
@@ -513,28 +436,7 @@ function SimulationCanvas() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
 
-  // ── Helpers ──
-  const getActiveMessages = useCallback((): ChatMessage[] => {
-    return (
-      timelinesRef.current.find(
-        (t) => t.id === activeTimelineIdRef.current
-      )?.messages || []
-    );
-  }, []);
 
-  const updateTimelineMessages = useCallback(
-    (
-      timelineId: string,
-      updater: (msgs: ChatMessage[]) => ChatMessage[]
-    ) => {
-      setTimelines((prev) =>
-        prev.map((t) =>
-          t.id === timelineId ? { ...t, messages: updater(t.messages) } : t
-        )
-      );
-    },
-    []
-  );
 
   // ── Call /api/chat ──
   const callChatAPI = useCallback(
@@ -565,13 +467,40 @@ function SimulationCanvas() {
     [profile]
   );
 
+  // ── Auto-naming Session ──
+  const autoNameSession = useCallback(async (msgs: ChatMessage[]) => {
+    // Only trigger if we have a few messages (meaning the story has started)
+    if (msgs.length < 3 || msgs.length > 8) return;
+
+    const store = useSimulationStore.getState();
+    const session = store.sessions.find(s => s.id === store.activeSessionId);
+    if (!session) return;
+
+    // Check if it already has a custom name (not containing "새 세션" and not starting with '[')
+    if (session.name.startsWith("[")) return;
+
+    try {
+      const res = await fetch("/api/title", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: msgs }),
+      });
+      const data = await res.json();
+      if (data.title && data.title.startsWith("[")) {
+        useSimulationStore.getState().updateSessionName(session.id, data.title);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   // ── Handle sending a message ──
   const handleSendMessage = useCallback(
     async (text: string) => {
       if (!profile || isGeneratingRef.current) return;
       setError(null);
 
-      const tlId = activeTimelineIdRef.current;
+      const tlId = useSimulationStore.getState().activeTimelineId;
 
       // Add user message
       const userMsg: ChatMessage = {
@@ -580,6 +509,7 @@ function SimulationCanvas() {
         content: text,
         timestamp: Date.now(),
       };
+
       updateTimelineMessages(tlId, (msgs) => [...msgs, userMsg]);
 
       setIsGenerating(true);
@@ -587,22 +517,21 @@ function SimulationCanvas() {
 
       try {
         const currentMsgs = [
-          ...getActiveMessages(),
-          userMsg,
+          ...useSimulationStore.getState().getActiveMessages(),
         ];
         const result = await callChatAPI(currentMsgs);
         if (!result) return;
 
         // ── learnedFacts 누적 → 프로필 업데이트 + 저장 ──
         if (result.updatedFacts && result.updatedFacts.length > 0) {
-          setProfile(prev => {
-            if (!prev) return prev;
-            const existing = prev.learnedFacts || [];
+          const currentProfile = useSimulationStore.getState().profile;
+          if (currentProfile) {
+            const existing = currentProfile.learnedFacts || [];
             const merged = [...existing, ...result.updatedFacts!.filter(f => !existing.includes(f))];
-            const updated = { ...prev, learnedFacts: merged };
+            const updated = { ...currentProfile, learnedFacts: merged };
+            setProfile(updated);
             localStorage.setItem("parallelme-profile", JSON.stringify(updated));
-            return updated;
-          });
+          }
         }
 
         const aiMsg: ChatMessage = {
@@ -621,6 +550,9 @@ function SimulationCanvas() {
         } else {
           playNodeCreate();
         }
+
+        // Auto-naming hook
+        setTimeout(() => autoNameSession(useSimulationStore.getState().getActiveMessages()), 0);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "오류가 발생했습니다."
@@ -639,7 +571,7 @@ function SimulationCanvas() {
       if (!profile || isGeneratingRef.current) return;
       setError(null);
 
-      const tlId = activeTimelineIdRef.current;
+      const tlId = useSimulationStore.getState().activeTimelineId;
 
       // Update chosen index on the message
       updateTimelineMessages(tlId, (msgs) =>
@@ -655,7 +587,7 @@ function SimulationCanvas() {
 
       try {
         // Get updated messages (with chosen index set)
-        const updatedMsgs = getActiveMessages().map((m) =>
+        const updatedMsgs = useSimulationStore.getState().getActiveMessages().map((m) =>
           m.id === msgId && m.branchPoint
             ? { ...m, branchPoint: { ...m.branchPoint, chosenIndex: index } }
             : m
@@ -676,6 +608,9 @@ function SimulationCanvas() {
         playBranchCreate();
         setShowForkEffect(true);
         if (navigator.vibrate) navigator.vibrate(50);
+
+        // Auto-naming hook
+        setTimeout(() => autoNameSession(useSimulationStore.getState().getActiveMessages()), 0);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "오류가 발생했습니다."
@@ -696,7 +631,7 @@ function SimulationCanvas() {
     setStartFailed(false);
     setError(null);
     try {
-      const tlId = activeTimelineIdRef.current;
+      const tlId = useSimulationStore.getState().activeTimelineId;
       const startMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: "user",
@@ -738,7 +673,8 @@ function SimulationCanvas() {
   useEffect(() => {
     if (!profile || hasStartedRef.current) return;
 
-    const msgs = getActiveMessages();
+    // We already checked this logic before, but make sure zustand has fully initialized
+    const msgs = useSimulationStore.getState().getActiveMessages();
     if (msgs.length > 0) {
       hasStartedRef.current = true;
       return;
@@ -748,8 +684,7 @@ function SimulationCanvas() {
 
     hasStartedRef.current = true;
     startChat();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile, timelines, activeTimelineId]);
+  }, [profile, timelines, activeTimelineId, startChat]);
 
   // ── Collect branch nodes for minimap ──
   // ── Build ReactFlow graph ──
@@ -758,6 +693,8 @@ function SimulationCanvas() {
       const branchNodes: {
         id: string;
         timeLabel: string;
+        nodeTitle?: string;
+        badge?: string;
         summary: string;
         choiceLabel?: string;
         timelineId: string;
@@ -791,6 +728,8 @@ function SimulationCanvas() {
             timeLabel: hasBranch
               ? (msg.branchPoint?.timeLabel || msg.timeLabel || "")
               : "",
+            nodeTitle: msg.branchPoint?.nodeTitle,
+            badge: msg.branchPoint?.badge,
             summary,
             choiceLabel,
             timelineId: timeline.id,
@@ -819,6 +758,8 @@ function SimulationCanvas() {
                   branchNodes.push({
                     id: dimId,
                     timeLabel: msg.branchPoint!.timeLabel,
+                    nodeTitle: msg.branchPoint!.nodeTitle,
+                    badge: msg.branchPoint!.badge,
                     summary: msg.branchPoint!.summary,
                     choiceLabel: c.label,
                     timelineId: timeline.id,
@@ -856,6 +797,8 @@ function SimulationCanvas() {
         position: { x: 0, y: 0 },
         data: {
           timeLabel: bn.timeLabel,
+          nodeTitle: bn.nodeTitle,
+          badge: bn.badge,
           summary: bn.summary,
           choiceLabel: bn.choiceLabel,
           isOnActivePath: bn.isOnActivePath,
@@ -888,8 +831,8 @@ function SimulationCanvas() {
               }
             }
           },
-          onToggleExpand: () => {},
-          onCompareSelect: () => {},
+          onToggleExpand: () => { },
+          onCompareSelect: () => { },
         } satisfies ScenarioNodeData,
       }));
 
@@ -963,35 +906,13 @@ function SimulationCanvas() {
       choiceLabel: "",
     });
 
-
-    const src = timelinesRef.current.find((t) => t.id === timelineId);
-    if (!src) return;
-    const branchIdx = src.messages.findIndex((m) => m.id === msgId);
-    if (branchIdx === -1) return;
-
-    const copied = src.messages.slice(0, branchIdx + 1).map((m) => ({
-      ...m,
-      id: m.id === msgId ? m.id : crypto.randomUUID(),
-      branchPoint:
-        m.id === msgId && m.branchPoint
-          ? { ...m.branchPoint, chosenIndex: choiceIndex }
-          : m.branchPoint,
-    }));
-
-    const newTl: Timeline = {
-      id: crypto.randomUUID(),
-      parentTimelineId: timelineId,
-      branchPointMsgId: msgId,
-      choiceIndex,
-      messages: copied,
-    };
-    setTimelines((prev) => [...prev, newTl]);
-    setActiveTimelineId(newTl.id);
+    const newTl = handleRewindStr(timelineId, msgId, choiceIndex);
+    if (!newTl) return;
 
     setIsGenerating(true);
     isGeneratingRef.current = true;
     try {
-      const result = await callChatAPI(copied, choiceLabel);
+      const result = await callChatAPI(newTl.messages, choiceLabel);
       if (!result) return;
 
       const aiMsg: ChatMessage = {
@@ -1001,13 +922,7 @@ function SimulationCanvas() {
         timestamp: Date.now(),
         branchPoint: result.branchPoint,
       };
-      setTimelines((prev) =>
-        prev.map((t) =>
-          t.id === newTl.id
-            ? { ...t, messages: [...t.messages, aiMsg] }
-            : t
-        )
-      );
+      updateTimelineMessages(newTl.id, (msgs) => [...msgs, aiMsg]);
       playBranchCreate();
       setShowForkEffect(true);
     } catch (err) {
@@ -1031,7 +946,7 @@ function SimulationCanvas() {
       chosen: string;
       notChosen: string[];
     }[] = [];
-    for (const tl of timelinesRef.current) {
+    for (const tl of useSimulationStore.getState().timelines) {
       for (const msg of tl.messages) {
         if (
           msg.role === "assistant" &&
@@ -1076,93 +991,24 @@ function SimulationCanvas() {
   // ── Session management ──
   const handleSwitchSession = useCallback(
     (sessionId: string) => {
-      if (sessionId === activeSessionId) {
-        setShowSessionDrawer(false);
-        return;
-      }
-
-      // Save current working copy back to sessions
-      const updatedSessions = sessions.map((s) =>
-        s.id === activeSessionId
-          ? {
-              ...s,
-              timelines,
-              activeTimelineId,
-              msgCount: timelines.flatMap((t) => t.messages).length,
-            }
-          : s
-      );
-
-      const target = updatedSessions.find((s) => s.id === sessionId);
-      if (!target) return;
-
-      setSessions(updatedSessions);
-      setActiveSessionId(sessionId);
-      setTimelines(target.timelines);
-      setActiveTimelineId(
-        target.activeTimelineId || target.timelines[0]?.id || ""
-      );
-      hasStartedRef.current = target.timelines.some(
-        (t) => t.messages.length > 0
-      );
+      handleSwitchSessionStr(sessionId);
       setShowSessionDrawer(false);
     },
-    [activeSessionId, sessions, timelines, activeTimelineId]
+    [handleSwitchSessionStr]
   );
 
   const handleNewSession = useCallback(() => {
     if (!profile) return;
-
-    // Save current session
-    const updatedSessions = sessions.map((s) =>
-      s.id === activeSessionId
-        ? {
-            ...s,
-            timelines,
-            activeTimelineId,
-            msgCount: timelines.flatMap((t) => t.messages).length,
-          }
-        : s
-    );
-
-    const tl: Timeline = {
-      id: crypto.randomUUID(),
-      parentTimelineId: null,
-      branchPointMsgId: "",
-      choiceIndex: -1,
-      messages: [],
-    };
-    const newSession: SimulationSession = {
-      id: crypto.randomUUID(),
-      name: `${profile.mode} · ${new Date().toLocaleDateString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`,
-      timelines: [tl],
-      activeTimelineId: tl.id,
-      createdAt: Date.now(),
-      msgCount: 0,
-    };
-
-    setSessions([...updatedSessions, newSession]);
-    setActiveSessionId(newSession.id);
-    setTimelines([tl]);
-    setActiveTimelineId(tl.id);
+    handleNewSessionStr();
     hasStartedRef.current = false;
     setShowSessionDrawer(false);
-  }, [profile, activeSessionId, sessions, timelines, activeTimelineId]);
+  }, [profile, handleNewSessionStr]);
 
   const handleDeleteSession = useCallback(
     (sessionId: string) => {
-      if (sessions.length <= 1) return;
-      if (sessionId === activeSessionId) {
-        const other = sessions.find(s => s.id !== sessionId);
-        if (!other) return;
-        setActiveSessionId(other.id);
-        setTimelines(other.timelines);
-        setActiveTimelineId(other.activeTimelineId || other.timelines[0]?.id || "");
-        hasStartedRef.current = other.timelines.some(t => t.messages.length > 0);
-      }
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      handleDeleteSessionStr(sessionId);
     },
-    [activeSessionId, sessions]
+    [handleDeleteSessionStr]
   );
 
   // ── Split divider drag ──
@@ -1196,6 +1042,30 @@ function SimulationCanvas() {
     setZoomLevel(viewport.zoom);
   }, []);
 
+  // ── Download Map ──
+  const [isDownloading, setIsDownloading] = useState(false);
+  const handleDownloadMap = useCallback(() => {
+    const flowEl = document.querySelector('.react-flow') as HTMLElement | null;
+    if (!flowEl) return;
+
+    setIsDownloading(true);
+    toPng(flowEl, {
+      backgroundColor: '#05030f',
+      quality: 1,
+      pixelRatio: 2,
+    }).then((dataUrl) => {
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `parallel-me-universe-${Date.now()}.png`;
+      a.click();
+    }).catch((err) => {
+      console.error('Failed to download image', err);
+      alert('우주 캡처에 실패했습니다.');
+    }).finally(() => {
+      setIsDownloading(false);
+    });
+  }, []);
+
   // ── Message count ──
   const messageCount = timelines.flatMap((t) => t.messages).length;
 
@@ -1218,10 +1088,10 @@ function SimulationCanvas() {
   return (
     <div
       className="w-screen h-screen relative overflow-hidden flex flex-col"
-      style={{ background: "#000" }}
+      style={{ background: "transparent" }}
     >
-      {/* StarField — 배경 최하단 */}
-      <StarField messageCount={messageCount} zoomLevel={zoomLevel} splitDir={splitDir} splitRatio={splitRatio} />
+      {/* CosmicCanvas — 배경 최하단 고정 */}
+      <CosmicCanvas evolutionLevel={messageCount} />
 
       {/* Top bar */}
       <div
@@ -1319,6 +1189,21 @@ function SimulationCanvas() {
               {soundMuted ? "\u{1F507}" : "\u{1F50A}"}
             </button>
 
+            {/* Download */}
+            <button
+              onClick={handleDownloadMap}
+              disabled={isDownloading}
+              className="px-2 py-1 rounded-lg text-[11px] transition-all duration-300"
+              style={{
+                background: "rgba(0,0,0,0.5)",
+                border: "1px solid rgba(212,168,83,0.2)",
+                color: isDownloading ? "rgba(255,255,255,0.3)" : "rgba(212,168,83,0.7)",
+              }}
+              title="현재 우주 캡처"
+            >
+              {isDownloading ? "캡처 중..." : "📸 캡처"}
+            </button>
+
             {/* Home */}
             <button
               onClick={() => router.push("/")}
@@ -1364,9 +1249,9 @@ function SimulationCanvas() {
           ) : (
             <>
               {nodes.length === 0 && (
-                <div className="absolute inset-0 flex items-center justify-center z-10">
-                  <p className="text-xs text-center px-4" style={{ color: "rgba(255,255,255,0.2)" }}>
-                    대화를 시작하면 별자리가 생겨나.
+                <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                  <p className="text-[11px] text-center px-4" style={{ color: "rgba(255,255,255,0.3)" }}>
+                    대화를 시작하면<br />여기에 너의 평행우주가 그려져.
                   </p>
                 </div>
               )}
@@ -1448,9 +1333,9 @@ function SimulationCanvas() {
           {splitSwapped ? (
             <>
               {nodes.length === 0 && (
-                <div className="absolute inset-0 flex items-center justify-center z-10">
-                  <p className="text-xs text-center px-4" style={{ color: "rgba(255,255,255,0.2)" }}>
-                    대화를 시작하면 별자리가 생겨나.
+                <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                  <p className="text-[11px] text-center px-4" style={{ color: "rgba(255,255,255,0.3)" }}>
+                    대화를 시작하면<br />여기에 너의 평행우주가 그려져.
                   </p>
                 </div>
               )}

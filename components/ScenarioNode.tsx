@@ -5,6 +5,8 @@ import { Handle, Position } from "@xyflow/react";
 
 export interface ScenarioNodeData {
   timeLabel: string;
+  nodeTitle?: string;
+  badge?: string;
   summary: string;
   choiceLabel?: string;
   isOnActivePath: boolean;
@@ -24,6 +26,8 @@ export interface ScenarioNodeData {
 function ScenarioNode({ data }: { data: ScenarioNodeData }) {
   const {
     timeLabel,
+    nodeTitle,
+    badge,
     summary,
     choiceLabel,
     isOnActivePath,
@@ -109,7 +113,8 @@ function ScenarioNode({ data }: { data: ScenarioNodeData }) {
         className="rounded-2xl transition-all duration-300 cursor-pointer"
         onClick={handleClick}
         style={{
-          width: "min(280px, 80vw)",
+          width: "320px",
+          maxWidth: "85vw",
           background: isDimBranch
             ? "rgba(12, 8, 24, 0.93)"
             : "rgba(5, 2, 18, 0.96)",
@@ -146,8 +151,13 @@ function ScenarioNode({ data }: { data: ScenarioNodeData }) {
           }}
         />
 
-        {/* Time label */}
+        {/* Time label and Badge */}
         <div className="flex items-center gap-2 mb-2">
+          {badge && (
+            <span className="text-xl" style={{ filter: "drop-shadow(0 0 5px rgba(212,168,83,0.5))" }}>
+              {badge}
+            </span>
+          )}
           <span
             className="text-[11px] px-2 py-0.5 rounded-full"
             style={{
@@ -167,6 +177,19 @@ function ScenarioNode({ data }: { data: ScenarioNodeData }) {
           )}
         </div>
 
+        {/* Node Title (Milestone) */}
+        {nodeTitle && (
+          <h3
+            className="text-base font-medium mb-1 tracking-wider"
+            style={{
+              color: isOnActivePath ? "rgba(255, 230, 180, 0.95)" : "rgba(255, 255, 255, 0.7)",
+              textShadow: isOnActivePath ? "0 0 10px rgba(212,168,83,0.3)" : "none",
+            }}
+          >
+            {nodeTitle}
+          </h3>
+        )}
+
         {/* Summary */}
         <p
           className="text-[13px] leading-relaxed"
@@ -175,9 +198,13 @@ function ScenarioNode({ data }: { data: ScenarioNodeData }) {
               ? "rgba(255, 255, 255, 0.85)"
               : "rgba(255, 255, 255, 0.5)",
             wordBreak: "keep-all",
+            overflow: "hidden",
+            display: "-webkit-box",
+            WebkitLineClamp: isExpanded ? "none" : 4,
+            WebkitBoxOrient: "vertical",
           }}
         >
-          {isExpanded ? summary : summary.length > 60 ? summary.substring(0, 60) + "..." : summary}
+          {isExpanded ? summary : summary}
         </p>
 
         {/* Choice label */}

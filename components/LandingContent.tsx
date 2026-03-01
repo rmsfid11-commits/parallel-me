@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { startAmbient, stopAmbient, setMuted, isMuted } from "@/lib/sounds";
 
 export default function LandingContent() {
@@ -35,124 +36,147 @@ export default function LandingContent() {
   };
 
   return (
-    <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4">
-      {/* Sound toggle — glass morphism */}
+    <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 overflow-hidden pointer-events-none">
+      {/* Sound toggle */}
       {soundStarted && (
         <button
           onClick={toggleMute}
-          className="fixed top-5 right-5 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 z-50"
+          className="fixed top-6 right-6 w-11 h-11 rounded-full flex items-center justify-center transition-all duration-500 z-50 pointer-events-auto"
           style={{
-            background: "rgba(5,5,20,0.5)",
-            border: "1px solid rgba(212, 168, 83, 0.15)",
-            backdropFilter: "blur(12px)",
-            boxShadow: "0 0 20px rgba(0,0,0,0.3)",
+            background: "rgba(10, 5, 25, 0.4)",
+            border: "1px solid rgba(140, 100, 255, 0.2)",
+            backdropFilter: "blur(16px)",
+            boxShadow: "0 0 25px rgba(0,0,0,0.5)",
           }}
         >
-          <span className="text-base" style={{ color: "rgba(212, 168, 83, 0.7)" }}>
+          <span className="text-lg" style={{ color: "rgba(212, 168, 83, 0.8)", textShadow: "0 0 10px rgba(212, 168, 83, 0.5)" }}>
             {muted ? "\u{1F507}" : "\u{1F509}"}
           </span>
         </button>
       )}
 
-      <div className="text-center animate-fadeIn">
-        {/* Logo — enhanced glow */}
-        <h1
-          className="text-5xl md:text-7xl font-light tracking-wide text-white animate-glowPulse"
-          style={{
-            fontFamily: "var(--font-display), serif",
-            textShadow:
-              "0 0 40px rgba(212, 168, 83, 0.4), 0 0 80px rgba(179, 136, 255, 0.2), 0 0 120px rgba(99, 102, 241, 0.1)",
-          }}
-        >
-          Parallel Me
-        </h1>
-
-        {/* Subtitle */}
-        <p
-          className="mt-5 text-base md:text-lg text-white/45 tracking-widest animate-fadeInSlow"
-          style={{
-            fontFamily: "var(--font-display), serif",
-            textShadow: "0 0 20px rgba(179,136,255,0.1)",
-          }}
-        >
-          당신조차 몰랐던 당신의 우주를 추적합니다.
-        </p>
-
-        {/* Added descriptive paragraph to explain the app's core value proposition */}
-        <p
-          className="mt-6 max-w-xl mx-auto text-sm md:text-base text-white/60 leading-relaxed font-light animate-fadeInSlow"
-          style={{
-            textShadow: "0 0 10px rgba(255,255,255,0.1)",
-          }}
-        >
-          만약 그때 다른 선택을 했다면 어땠을까요? <br />
-          간단한 몇 가지 질문을 통해, 다른 차원에 존재하는<br />
-          평행우주의 '나(Parallel Me)'를 시뮬레이션 해보세요.
-        </p>
-
-        {/* CTA — glass morphism button */}
-        <Link
-          href="/onboarding"
-          className="inline-block mt-12 px-10 py-4 rounded-full text-sm md:text-base font-medium tracking-wider transition-all duration-700 animate-fadeInSlow2"
-          style={{
-            background: "linear-gradient(135deg, rgba(212,168,83,0.12), rgba(179,136,255,0.08))",
-            border: "1px solid rgba(212,168,83,0.4)",
-            color: "rgba(212,168,83,0.95)",
-            backdropFilter: "blur(12px)",
-            boxShadow: "0 0 30px rgba(212,168,83,0.15), 0 0 60px rgba(179,136,255,0.1), inset 0 0 30px rgba(212,168,83,0.05)",
-          }}
-          onMouseEnter={(e) => {
-            const el = e.currentTarget as HTMLElement;
-            el.style.boxShadow = "0 0 40px rgba(212,168,83,0.3), 0 0 80px rgba(179,136,255,0.2), inset 0 0 40px rgba(212,168,83,0.1)";
-            el.style.borderColor = "rgba(212,168,83,0.6)";
-            el.style.background = "linear-gradient(135deg, rgba(212,168,83,0.15), rgba(179,136,255,0.12))";
-          }}
-          onMouseLeave={(e) => {
-            const el = e.currentTarget as HTMLElement;
-            el.style.boxShadow = "0 0 30px rgba(212,168,83,0.15), 0 0 60px rgba(179,136,255,0.1), inset 0 0 30px rgba(212,168,83,0.05)";
-            el.style.borderColor = "rgba(212,168,83,0.4)";
-            el.style.background = "linear-gradient(135deg, rgba(212,168,83,0.12), rgba(179,136,255,0.08))";
-          }}
-        >
-          내 평행우주 시뮬레이션 시작하기
-        </Link>
-
-        {/* How it Works / Guide section */}
+      <div className="text-center flex flex-col items-center justify-center pointer-events-auto mt-[-5vh]">
+        {/* Floating App Logo Image with intense magma/liquid corona effect */}
         <div
-          className="mt-16 text-left max-w-sm mx-auto p-6 rounded-2xl animate-fadeInSlow2 border border-white/5 bg-white/5 backdrop-blur-md"
+          className="relative w-48 h-48 md:w-64 md:h-64 mb-6 rounded-full overflow-hidden"
+          style={{
+            animation: "float 6s ease-in-out infinite",
+            // Powerful outer aura simulating the glowing liquid/lightning from the simulation
+            boxShadow: "0 0 60px 10px rgba(179,136,255,0.6), 0 0 100px 30px rgba(212,168,83,0.3), inset 0 0 20px rgba(179,136,255,0.5)",
+            border: "2px solid rgba(179,136,255,0.3)"
+          }}
         >
-          <p className="text-white/80 font-medium mb-4 text-sm tracking-wide text-center">
-            이용 안내
-          </p>
-          <ol className="space-y-4 text-xs md:text-sm text-white/60 font-light">
-            <li className="flex gap-3 items-start">
-              <span className="text-[#d4a853] font-medium">1</span>
-              <span>나의 기본 정보(직업, 관심사) 입력</span>
-            </li>
-            <li className="flex gap-3 items-start">
-              <span className="text-[#d4a853] font-medium">2</span>
-              <span>보고 싶은 우주의 분위기(희망/현실/최악) 선택</span>
-            </li>
-            <li className="flex gap-3 items-start">
-              <span className="text-[#d4a853] font-medium">3</span>
-              <span>AI가 분석한 나의 평행우주 스토리라인 감상</span>
-            </li>
-          </ol>
+          {/* Inner pulsating glow behind the image */}
+          <div
+            className="absolute inset-0 z-0 animate-pulse"
+            style={{
+              background: "radial-gradient(circle, rgba(212,168,83,0.4) 0%, rgba(140,100,255,0.1) 70%, transparent 100%)",
+              animationDuration: "3s"
+            }}
+          />
+          <Image
+            src="/icon-512.png"
+            alt="Parallel Me Logo"
+            fill
+            className="object-cover z-10"
+            priority
+          />
+        </div>
+
+        {/* Text Title (Loads immensely faster now) */}
+        <div style={{
+          animation: "float 6s ease-in-out infinite", transform: "translateY(-10px)", opacity: 0,
+          animationName: "fadeIn, float", animationDuration: "1s, 6s", animationTimingFunction: "ease-out, ease-in-out", animationIterationCount: "1, infinite", animationFillMode: "forwards, none"
+        }}>
+          <h1
+            className="text-6xl md:text-8xl font-light tracking-widest text-white"
+            style={{
+              fontFamily: "var(--font-display), serif",
+              textShadow:
+                "0 0 50px rgba(212, 168, 83, 0.5), 0 0 100px rgba(140, 100, 255, 0.3), 0 0 150px rgba(70, 50, 200, 0.2)",
+              letterSpacing: "0.15em",
+            }}
+          >
+            Parallel Me
+          </h1>
+        </div>
+
+        {/* Subtitle (Loads right after title) */}
+        <p
+          className="mt-8 text-sm md:text-base tracking-[0.3em] font-light"
+          style={{
+            color: "rgba(255,255,255,0.5)",
+            textShadow: "0 0 15px rgba(179,136,255,0.2)",
+            opacity: 0,
+            animation: "fadeIn 1.5s ease-out forwards 0.5s", // Fast load
+          }}
+        >
+          당신조차 몰랐던 당신의 우주를 추적합니다
+        </p>
+
+        {/* CTA Button — glowing portal (Loads fast) */}
+        <div
+          style={{
+            opacity: 0,
+            animation: "fadeIn 1.5s ease-out forwards 1.0s", // Fast load
+            marginTop: "4rem",
+          }}
+        >
+          <Link
+            href="/onboarding"
+            className="group relative inline-flex items-center justify-center px-12 py-5 rounded-full overflow-hidden transition-all duration-700"
+            style={{
+              background: "rgba(20, 10, 40, 0.3)",
+              border: "1px solid rgba(212,168,83,0.2)",
+              backdropFilter: "blur(12px)",
+              boxShadow: "0 0 40px rgba(140, 100, 255, 0.1), inset 0 0 20px rgba(212,168,83,0.05)",
+            }}
+          >
+            {/* Button Inner Glow */}
+            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 rounded-full"
+              style={{
+                background: "linear-gradient(135deg, rgba(212,168,83,0.15), rgba(140,100,255,0.15))",
+                boxShadow: "inset 0 0 30px rgba(212,168,83,0.1)"
+              }}
+            />
+
+            <span
+              className="relative text-sm tracking-[0.2em] font-light transition-colors duration-500"
+              style={{
+                color: "rgba(212, 168, 83, 0.8)",
+                textShadow: "0 0 15px rgba(212, 168, 83, 0.5)",
+              }}
+            >
+              평행우주 접속하기
+            </span>
+          </Link>
         </div>
 
         {/* Sound hint */}
         {!soundStarted && (
           <p
-            className="mt-8 text-[11px] animate-fadeInSlow2"
+            className="absolute bottom-12 text-[10px] tracking-widest font-light"
             style={{
-              color: "rgba(255,255,255,0.15)",
-              textShadow: "0 0 10px rgba(179,136,255,0.1)",
+              color: "rgba(255,255,255,0.2)",
+              opacity: 0,
+              animation: "fadeIn 4s ease-out forwards 5s",
             }}
           >
-            화면을 터치하면 우주의 소리가 시작됩니다
+            화면을 터치하면 우주의 소리가 깨어납니다
           </p>
         )}
       </div>
+
+      <style jsx global>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-15px); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; filter: blur(10px); }
+          to { opacity: 1; filter: blur(0px); }
+        }
+      `}</style>
     </div>
   );
 }

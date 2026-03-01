@@ -3,6 +3,8 @@ import { generateChatResponse } from "@/lib/gemini";
 import { UserProfile, ChatMessage } from "@/lib/types";
 import { computeAllAstrology, formatAstrologyForPrompt } from "@/lib/astrology";
 
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
