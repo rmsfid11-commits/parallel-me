@@ -75,33 +75,70 @@ export default function LandingContent() {
             textShadow: "0 0 20px rgba(179,136,255,0.1)",
           }}
         >
-          당신조차 몰랐던 당신의 우주를 추적합니다
+          당신조차 몰랐던 당신의 우주를 추적합니다.
+        </p>
+
+        {/* Added descriptive paragraph to explain the app's core value proposition */}
+        <p
+          className="mt-6 max-w-xl mx-auto text-sm md:text-base text-white/60 leading-relaxed font-light animate-fadeInSlow"
+          style={{
+            textShadow: "0 0 10px rgba(255,255,255,0.1)",
+          }}
+        >
+          만약 그때 다른 선택을 했다면 어땠을까요? <br />
+          간단한 몇 가지 질문을 통해, 다른 차원에 존재하는<br />
+          평행우주의 '나(Parallel Me)'를 시뮬레이션 해보세요.
         </p>
 
         {/* CTA — glass morphism button */}
         <Link
           href="/onboarding"
-          className="inline-block mt-12 px-10 py-4 rounded-full text-sm tracking-wider transition-all duration-700 animate-fadeInSlow2"
+          className="inline-block mt-12 px-10 py-4 rounded-full text-sm md:text-base font-medium tracking-wider transition-all duration-700 animate-fadeInSlow2"
           style={{
-            background: "linear-gradient(135deg, rgba(212,168,83,0.08), rgba(179,136,255,0.05))",
-            border: "1px solid rgba(212,168,83,0.3)",
-            color: "rgba(212,168,83,0.9)",
+            background: "linear-gradient(135deg, rgba(212,168,83,0.12), rgba(179,136,255,0.08))",
+            border: "1px solid rgba(212,168,83,0.4)",
+            color: "rgba(212,168,83,0.95)",
             backdropFilter: "blur(12px)",
-            boxShadow: "0 0 30px rgba(212,168,83,0.1), 0 0 60px rgba(179,136,255,0.05), inset 0 0 30px rgba(212,168,83,0.03)",
+            boxShadow: "0 0 30px rgba(212,168,83,0.15), 0 0 60px rgba(179,136,255,0.1), inset 0 0 30px rgba(212,168,83,0.05)",
           }}
           onMouseEnter={(e) => {
             const el = e.currentTarget as HTMLElement;
-            el.style.boxShadow = "0 0 40px rgba(212,168,83,0.2), 0 0 80px rgba(179,136,255,0.1), inset 0 0 40px rgba(212,168,83,0.05)";
-            el.style.borderColor = "rgba(212,168,83,0.5)";
+            el.style.boxShadow = "0 0 40px rgba(212,168,83,0.3), 0 0 80px rgba(179,136,255,0.2), inset 0 0 40px rgba(212,168,83,0.1)";
+            el.style.borderColor = "rgba(212,168,83,0.6)";
+            el.style.background = "linear-gradient(135deg, rgba(212,168,83,0.15), rgba(179,136,255,0.12))";
           }}
           onMouseLeave={(e) => {
             const el = e.currentTarget as HTMLElement;
-            el.style.boxShadow = "0 0 30px rgba(212,168,83,0.1), 0 0 60px rgba(179,136,255,0.05), inset 0 0 30px rgba(212,168,83,0.03)";
-            el.style.borderColor = "rgba(212,168,83,0.3)";
+            el.style.boxShadow = "0 0 30px rgba(212,168,83,0.15), 0 0 60px rgba(179,136,255,0.1), inset 0 0 30px rgba(212,168,83,0.05)";
+            el.style.borderColor = "rgba(212,168,83,0.4)";
+            el.style.background = "linear-gradient(135deg, rgba(212,168,83,0.12), rgba(179,136,255,0.08))";
           }}
         >
-          나의 우주 열기
+          내 평행우주 시뮬레이션 시작하기
         </Link>
+
+        {/* How it Works / Guide section */}
+        <div
+          className="mt-16 text-left max-w-sm mx-auto p-6 rounded-2xl animate-fadeInSlow2 border border-white/5 bg-white/5 backdrop-blur-md"
+        >
+          <p className="text-white/80 font-medium mb-4 text-sm tracking-wide text-center">
+            이용 안내
+          </p>
+          <ol className="space-y-4 text-xs md:text-sm text-white/60 font-light">
+            <li className="flex gap-3 items-start">
+              <span className="text-[#d4a853] font-medium">1</span>
+              <span>나의 기본 정보(직업, 관심사) 입력</span>
+            </li>
+            <li className="flex gap-3 items-start">
+              <span className="text-[#d4a853] font-medium">2</span>
+              <span>보고 싶은 우주의 분위기(희망/현실/최악) 선택</span>
+            </li>
+            <li className="flex gap-3 items-start">
+              <span className="text-[#d4a853] font-medium">3</span>
+              <span>AI가 분석한 나의 평행우주 스토리라인 감상</span>
+            </li>
+          </ol>
+        </div>
 
         {/* Sound hint */}
         {!soundStarted && (
